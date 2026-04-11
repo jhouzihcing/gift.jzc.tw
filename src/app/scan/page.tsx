@@ -85,7 +85,7 @@ export default function ScanPage() {
       addCard({
         id: crypto.randomUUID(),
         merchant: finalMerchant,
-        name: finalMerchant === "7-11" ? "統一超商商品卡" : `${finalMerchant} 禮物卡`,
+        name: finalMerchant === "7-11" ? "7-11 商品卡" : `${finalMerchant} 禮物卡`,
         barcode: data.primary || "",
         secondaryBarcode: data.secondary || null,
         amount: Number(amount),
@@ -116,7 +116,7 @@ export default function ScanPage() {
     return (
       <div className="min-h-[100dvh] bg-slate-50 flex flex-col items-center justify-center p-6 text-slate-900 font-sans">
          <div className="w-full max-w-sm flex flex-col gap-8 relative">
-            <div className="absolute top-[-15%] left-[-15%] w-[50vw] h-[50vw] bg-[#10b981]/5 rounded-full blur-[80px] pointer-events-none" />
+            <div className="absolute top-[-15%] left-[-15%] w-[50vw] h-[50vw] bg-[#34c759]/5 rounded-full blur-[80px] pointer-events-none" />
 
             <button onClick={() => router.back()} className="self-start text-slate-300 hover:text-slate-900 transition-all p-2 -ml-2 z-10">
               <ChevronLeft size={32} />
@@ -124,7 +124,7 @@ export default function ScanPage() {
             
             <div className="text-left z-10">
               <h1 className="text-4xl font-black tracking-tight text-slate-900">批量掃描</h1>
-              <p className="text-sm text-[#10b981] mt-2 font-black uppercase tracking-[0.4em]">Setup Session</p>
+              <p className="text-sm text-[#34c759] mt-2 font-black uppercase tracking-[0.4em]">Setup Session</p>
             </div>
 
             <div className="space-y-6 z-10">
@@ -137,11 +137,11 @@ export default function ScanPage() {
                       onClick={() => handleMerchantChange(m)}
                       className={`shrink-0 px-6 py-4 rounded-[1.5rem] font-black transition-all snap-start border-2 text-sm ${
                         (isCustomMode && m === "其它自訂") || (!isCustomMode && merchant === m)
-                          ? "bg-slate-900 text-[#10b981] border-slate-900 shadow-xl shadow-slate-900/10" 
+                          ? "bg-slate-900 text-[#34c759] border-slate-900 shadow-xl shadow-slate-900/10" 
                           : "bg-white text-slate-400 border-slate-100 hover:bg-slate-50 shadow-sm"
                       }`}
                     >
-                      {m === "7-11" ? "統一超商" : m}
+                      {m}
                     </button>
                   ))}
                 </div>
@@ -152,7 +152,7 @@ export default function ScanPage() {
                      placeholder="請輸入商家名稱..." 
                      value={merchant}
                      onChange={(e) => setMerchant(e.target.value)}
-                     className="w-full bg-white border-2 border-slate-100 rounded-[1.5rem] px-6 py-4 text-xl font-bold text-slate-900 outline-none focus:border-[#10b981] transition-all shadow-sm"
+                     className="w-full bg-white border-2 border-slate-100 rounded-[1.5rem] px-6 py-4 text-xl font-black text-slate-900 outline-none focus:border-[#34c759] transition-all shadow-sm"
                    />
                 )}
               </div>
@@ -160,34 +160,36 @@ export default function ScanPage() {
               <div className="flex flex-col gap-3">
                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">卡片面額 (金額)</label>
                  <div className="relative">
-                    <span className="absolute left-6 top-1/2 -translate-y-1/2 text-2xl font-black text-[#10b981]">$</span>
+                    <span className="absolute left-6 top-1/2 -translate-y-1/2 text-2xl font-black text-[#34c759]">$</span>
                     <input 
                       type="number" 
                       placeholder="500" 
                       value={amount}
                       onChange={(e) => setAmount(Number(e.target.value))}
-                      className="w-full bg-white border-2 border-slate-100 rounded-[2rem] pl-12 pr-6 py-6 text-5xl font-black text-slate-900 outline-none focus:border-[#10b981] transition-all shadow-sm placeholder:text-slate-50"
+                      className="w-full bg-white border-2 border-slate-100 rounded-[2rem] pl-12 pr-6 py-6 text-5xl font-black text-slate-900 outline-none focus:border-[#34c759] transition-all shadow-sm placeholder:text-slate-50"
                     />
                  </div>
               </div>
 
-              <div className="bg-white p-6 rounded-[2rem] shadow-[0_10px_30px_-10px_rgba(0,0,0,0.05)] border border-slate-100">
+              <div className="bg-white p-6 rounded-[2rem] shadow-[0_10px_40px_-10px_rgba(52,199,89,0.1)] border border-slate-100">
                  <div className="flex items-center justify-between">
                     <div>
                        <h3 className="font-black text-slate-800 text-sm">智慧雙條碼模式</h3>
                        <p className="text-[10px] text-slate-400 mt-1 font-bold italic">自動識別卡號與密碼</p>
                     </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" checked={isDualMode} onChange={toggleDualMode} className="sr-only peer" />
-                      <div className="w-14 h-7 bg-slate-100 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-slate-200 after:border after:rounded-full after:h-5 after:w-7 after:transition-all peer-checked:bg-[#10b981] shadow-inner"></div>
-                    </label>
+                    <button 
+                      onClick={toggleDualMode}
+                      className={`w-14 h-8 rounded-full transition-all relative ${isDualMode ? 'bg-[#34c759]' : 'bg-slate-200'}`}
+                    >
+                       <div className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full transition-transform shadow-md ${isDualMode ? 'translate-x-6' : 'translate-x-0'}`} />
+                    </button>
                  </div>
               </div>
             </div>
 
             <button 
               onClick={handleStart}
-              className="w-full mt-4 bg-slate-900 text-[#10b981] font-black rounded-[2.5rem] py-6 flex items-center justify-center gap-4 transition-all hover:bg-slate-800 active:scale-95 shadow-2xl shadow-slate-900/10 z-10 text-xl uppercase tracking-widest"
+              className="w-full mt-4 bg-gradient-to-b from-[#34c759] to-[#28cd41] text-white font-black rounded-full py-6 flex items-center justify-center gap-4 transition-all active:scale-95 shadow-2xl shadow-[#34c759]/30 z-10 text-xl uppercase tracking-widest"
             >
               <ScanLine size={32} /> 啟動相機掃描
             </button>
@@ -223,7 +225,7 @@ export default function ScanPage() {
             <div className="flex flex-col w-full gap-4 mt-8 max-w-xs">
               <button 
                 onClick={() => startScanning()}
-                className="w-full bg-[#10b981] text-white font-black py-5 rounded-3xl shadow-xl shadow-[#10b981]/20"
+                className="w-full bg-[#34c759] text-white font-black py-5 rounded-3xl shadow-xl shadow-[#34c759]/20"
               >
                 嘗試重啟相機
               </button>

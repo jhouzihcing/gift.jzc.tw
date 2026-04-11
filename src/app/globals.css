@@ -1,11 +1,12 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f8fafc; /* Slate 50 - Soft Gray Background */
-  --foreground: #1e293b; /* Slate 800 - Deep Charcoal Text */
-  --primary: #10b981;    /* Emerald 500 - Reliable Green */
-  --primary-dark: #059669; /* Emerald 600 - Hover State */
-  --card-shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.08);
+  --background: #f8fafc; /* Slate 50 */
+  --foreground: #1e293b; /* Slate 800 */
+  --primary: #34c759;    /* FaceTime Green */
+  --primary-dark: #28cd41; /* FaceTime Green Darker */
+  --primary-gradient: linear-gradient(180deg, #34c759 0%, #28cd41 100%);
+  --card-shadow: 0 20px 50px -12px rgba(52, 199, 89, 0.12);
 }
 
 @media (prefers-color-scheme: dark) {

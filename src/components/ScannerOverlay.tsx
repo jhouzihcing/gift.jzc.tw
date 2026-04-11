@@ -33,45 +33,48 @@ export default function ScannerOverlay({
 
           <div className="flex flex-col items-end gap-2">
              <div className="bg-slate-900/60 backdrop-blur-xl border border-white/10 px-6 py-3 rounded-full flex items-center gap-3">
-                <div className={`w-2.5 h-2.5 rounded-full ${scanState === "success" ? "bg-[#10b981]" : "bg-red-500 animate-pulse"}`} />
-                <span className="text-white font-black text-xs tracking-[0.2em] uppercase">
+                <div className={`w-2 h-2 rounded-full ${scanState === "success" ? "bg-[#34c759]" : "bg-[#34c759] animate-pulse"}`} />
+                <span className="text-white font-black text-[10px] tracking-[0.2em] uppercase">
                   {scanState === "scanning-a" ? "正在掃描卡號" : 
                    scanState === "scanning-b" ? "正在掃描密碼" : 
-                   scanState === "success" ? "辨識完成" : "等待中"}
+                   scanState === "success" ? "辨識完成" : "等待啟動"}
                 </span>
              </div>
              {amount !== undefined && amount !== "" && (
-               <div className="text-[#10b981] font-black text-3xl tracking-tighter mt-1 bg-slate-900/80 px-6 py-2 rounded-2xl shadow-2xl border border-white/5">
+               <div className="text-[#34c759] font-black text-3xl tracking-tighter mt-1 bg-slate-900/80 px-6 py-2 rounded-2xl shadow-2xl border border-white/5">
                  ${amount}
                </div>
              )}
           </div>
        </div>
 
-       {/* 中央掃描框 */}
+       {/* 中央掃描框 - 改為圓形風格 */}
        <div className="flex-1 flex items-center justify-center p-12">
-         <div className="relative w-full aspect-square max-w-[300px]">
-           {/* 四個角落的 L 形 - 改用可靠綠 */}
-           <div className="absolute top-0 left-0 w-10 h-10 border-t-4 border-l-4 border-[#10b981] rounded-tl-3xl opacity-50" />
-           <div className="absolute top-0 right-0 w-10 h-10 border-t-4 border-r-4 border-[#10b981] rounded-tr-3xl opacity-50" />
-           <div className="absolute bottom-0 left-0 w-10 h-10 border-b-4 border-l-4 border-[#10b981] rounded-bl-3xl opacity-50" />
-           <div className="absolute bottom-0 right-0 w-10 h-10 border-b-4 border-r-4 border-[#10b981] rounded-br-3xl opacity-50" />
+         <div className="relative w-full aspect-square max-w-[280px]">
+           {/* 四個角落的弧形 - 營造圓形感 */}
+           <div className="absolute top-0 left-0 w-16 h-16 border-t-4 border-l-4 border-[#34c759] rounded-tl-[3rem] opacity-60" />
+           <div className="absolute top-0 right-0 w-16 h-16 border-t-4 border-r-4 border-[#34c759] rounded-tr-[3rem] opacity-60" />
+           <div className="absolute bottom-0 left-0 w-16 h-16 border-b-4 border-l-4 border-[#34c759] rounded-bl-[3rem] opacity-60" />
+           <div className="absolute bottom-0 right-0 w-16 h-16 border-b-4 border-r-4 border-[#34c759] rounded-br-[3rem] opacity-60" />
            
-           {/* 掃描雷射線 - 改用可靠綠 */}
+           {/* 輔助圓環 */}
+           <div className="absolute inset-0 border border-white/5 rounded-full" />
+           
+           {/* 掃描雷射線 - FaceTime Green */}
            {(scanState === "scanning-a" || scanState === "scanning-b") && (
-             <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-[#10b981] to-transparent shadow-[0_0_20px_#10b981] animate-[scan_3s_ease-in-out_infinite]" />
+             <div className="absolute top-1/2 left-0 w-full h-[3px] bg-gradient-to-r from-transparent via-[#34c759] to-transparent shadow-[0_0_20px_#34c759] animate-[scan_2.5s_ease-in-out_infinite] -translate-y-1/2" />
            )}
            
            {scanState === "success" && (
-             <div className="absolute inset-0 bg-[#10b981]/10 flex items-center justify-center backdrop-blur-sm animate-in fade-in zoom-in duration-500 pointer-events-auto rounded-[3rem]">
-                <div className="bg-white rounded-full p-6 shadow-[0_20px_50px_rgba(16,185,129,0.3)] animate-in bounce-in duration-700">
-                   <CheckCircle2 size={72} className="text-[#10b981]" />
+             <div className="absolute inset-0 bg-[#34c759]/10 flex items-center justify-center backdrop-blur-sm animate-in fade-in zoom-in duration-500 pointer-events-auto rounded-full">
+                <div className="bg-white rounded-full p-6 shadow-[0_20px_50px_rgba(52,199,89,0.3)] animate-in bounce-in duration-700">
+                   <CheckCircle2 size={72} className="text-[#34c759]" />
                 </div>
              </div>
            )}
 
            {scanState === "duplicate" && (
-             <div className="absolute inset-0 bg-red-500/10 flex items-center justify-center animate-in shake duration-300 backdrop-blur-sm pointer-events-auto rounded-[3rem]">
+             <div className="absolute inset-0 bg-red-500/10 flex items-center justify-center animate-in shake duration-300 backdrop-blur-sm pointer-events-auto rounded-full">
                 <div className="bg-white rounded-full p-6 shadow-2xl animate-in bounce-in duration-700">
                    <AlertTriangle size={72} className="text-red-500" />
                 </div>
@@ -86,13 +89,13 @@ export default function ScannerOverlay({
              <div className="flex flex-col gap-4 animate-in slide-in-from-bottom-[50px] duration-700">
                 <button 
                   onClick={onNext}
-                  className="w-full bg-[#10b981] text-white font-black py-6 rounded-[2.5rem] text-xl shadow-[0_20px_40px_rgba(16,185,129,0.25)] active:scale-95 transition-all flex items-center justify-center gap-4"
+                  className="w-full bg-gradient-to-b from-[#34c759] to-[#28cd41] text-white font-black py-6 rounded-full text-xl shadow-[0_20px_40px_rgba(52,199,89,0.25)] active:scale-95 transition-all flex items-center justify-center gap-4"
                 >
                   <Plus size={28} /> 掃描下一張
                 </button>
                 <button 
                   onClick={onFinish}
-                  className="w-full bg-slate-900 text-[#10b981] font-black py-4 rounded-[2rem] active:scale-95 transition-all flex items-center justify-center gap-2 uppercase tracking-widest text-xs"
+                  className="w-full bg-slate-900 text-[#34c759] font-black py-4 rounded-full active:scale-95 transition-all flex items-center justify-center gap-2 uppercase tracking-widest text-[10px]"
                 >
                   完成並返回
                 </button>
@@ -101,9 +104,9 @@ export default function ScannerOverlay({
             scanState === "scanning-b" && (
               <button 
                 onClick={onSkipSecondary}
-                className="w-full bg-slate-900/60 backdrop-blur-md text-white font-black py-5 rounded-[1.5rem] active:scale-95 transition-all flex items-center justify-center gap-3 border border-white/5"
+                className="w-full bg-slate-900/60 backdrop-blur-md text-white font-black py-5 rounded-3xl active:scale-95 transition-all flex items-center justify-center gap-3 border border-white/5"
               >
-                只有一個條碼？點此跳過 <Plus size={20} className="rotate-45 text-[#10b981]" />
+                跳過密碼掃描 <Plus size={20} className="rotate-45 text-[#34c759]" />
               </button>
             )
           )}

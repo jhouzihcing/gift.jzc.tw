@@ -47,41 +47,35 @@ export default function GiftCard({ card, onDelete }: GiftCardProps) {
 
         <div className="w-full h-[1px] bg-slate-50 mb-6 relative" />
 
-        {/* 條碼顯示區 - 直接在背景上 */}
-        <div className="w-full flex flex-col gap-6 items-center overflow-hidden relative z-10">
+        {/* 條碼顯示區 - 直接在背景上，對等化與最大化 */}
+        <div className="w-full flex flex-col gap-8 items-center overflow-hidden relative z-10">
           {/* 條碼 1 */}
-          <div className="flex flex-col items-center gap-2 w-full">
-            <p className="text-[8px] text-slate-400 font-black uppercase tracking-[0.15em]">第一段條碼 (卡號)</p>
-            <div className="w-full flex justify-center">
+          <div className="w-full h-24 flex items-center justify-center">
+            <Barcode 
+              value={card.barcode} 
+              width={1.8} 
+              height={80} 
+              fontSize={12}
+              margin={0}
+              background="transparent"
+              fontOptions="bold"
+              lineColor="#1e293b"
+            />
+          </div>
+
+          {/* 條碼 2 (如果有) */}
+          {card.secondaryBarcode && (
+            <div className="w-full h-24 flex items-center justify-center">
               <Barcode 
-                value={card.barcode} 
-                width={1.6} 
-                height={70} 
+                value={card.secondaryBarcode} 
+                width={1.8} 
+                height={80} 
                 fontSize={12}
                 margin={0}
                 background="transparent"
                 fontOptions="bold"
                 lineColor="#1e293b"
               />
-            </div>
-          </div>
-
-          {/* 條碼 2 (如果有) */}
-          {card.secondaryBarcode && (
-            <div className="flex flex-col items-center gap-2 w-full">
-              <p className="text-[8px] text-slate-400 font-black uppercase tracking-[0.15em]">第二段條碼 (密碼)</p>
-              <div className="w-full flex justify-center">
-                <Barcode 
-                  value={card.secondaryBarcode} 
-                  width={1.6} 
-                  height={70} 
-                  fontSize={12}
-                  margin={0}
-                  background="transparent"
-                  fontOptions="bold"
-                  lineColor="#1e293b"
-                />
-              </div>
             </div>
           )}
         </div>
@@ -119,16 +113,10 @@ export default function GiftCard({ card, onDelete }: GiftCardProps) {
            </div>
            
            <div className="w-full flex flex-col gap-12 items-center">
-              <div className="w-full flex flex-col items-center gap-4">
-                 <p className="text-xs font-black text-slate-400 tracking-widest uppercase">第一段條碼 (卡號)</p>
-                 <Barcode value={card.barcode} width={2.5} height={120} fontSize={16} margin={10} fontOptions="bold" />
-              </div>
+              <Barcode value={card.barcode} width={2.8} height={160} fontSize={16} margin={10} fontOptions="bold" />
               
               {card.secondaryBarcode && (
-                <div className="w-full flex flex-col items-center gap-4">
-                   <p className="text-xs font-black text-slate-400 tracking-widest uppercase">第二段條碼 (密碼)</p>
-                   <Barcode value={card.secondaryBarcode} width={2.5} height={120} fontSize={16} margin={10} fontOptions="bold" />
-                </div>
+                <Barcode value={card.secondaryBarcode} width={2.8} height={160} fontSize={16} margin={10} fontOptions="bold" />
               )}
            </div>
            

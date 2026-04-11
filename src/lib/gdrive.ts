@@ -8,6 +8,10 @@ export async function findBackupFile(token: string) {
       headers: { Authorization: `Bearer ${token}` },
     }
   );
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({}));
+    throw new Error(errorBody.error?.message || `Failed to find backup file: ${response.status}`);
+  }
   const data = await response.json();
   return data.files && data.files.length > 0 ? data.files[0].id : null;
 }

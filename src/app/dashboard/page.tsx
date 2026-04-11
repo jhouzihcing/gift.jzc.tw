@@ -4,12 +4,12 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { useCardStore } from "@/store/useCardStore";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useMemo } from "react";
-import { ScanLine, CreditCard, Store, Settings, LayoutGrid } from "lucide-react";
+import { ScanLine, CreditCard, Store, Settings, LayoutGrid, Library } from "lucide-react";
 import GiftCard from "@/components/GiftCard";
 import Link from "next/link";
 
 export default function Dashboard() {
-  const { user, loading, isSyncing } = useAuthStore();
+  const { user, loading, isSyncing, syncError } = useAuthStore();
   const { cards, moveToTrash, customMerchants } = useCardStore();
   const router = useRouter();
 
@@ -43,7 +43,7 @@ export default function Dashboard() {
       <div className="absolute top-0 left-0 w-full h-[60vh] bg-gradient-to-b from-[#34c759]/5 to-transparent pointer-events-none" />
 
       {/* 頂部標題 - 縮小版且固定高度 */}
-      <header className="px-6 pt-6 pb-2 flex justify-between items-center z-20 shrink-0">
+      <header className="px-6 pt-6 pb-2 grow-0 flex justify-between items-center z-20 shrink-0">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg overflow-hidden shadow-lg border border-slate-100 bg-white">
              {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -54,12 +54,18 @@ export default function Dashboard() {
              />
           </div>
           <h1 className="text-xl font-black tracking-tight text-slate-900">
-            卡片管家 <span className="text-[10px] text-[#34c759] ml-1 font-black align-top">v1.2.1</span>
+            卡片管家 <span className="text-[10px] text-[#34c759] ml-1 font-black align-top">v1.2.2</span>
           </h1>
         </div>
-        <div className="flex items-center gap-1 bg-white/50 backdrop-blur-md px-3 py-1.5 rounded-full border border-slate-100 shadow-sm">
-           <div className={`w-1.5 h-1.5 rounded-full ${isSyncing ? 'bg-[#34c759] animate-pulse' : 'bg-[#34c759]'}`} />
-           <span className="text-[9px] font-black uppercase text-slate-400">Sync On</span>
+        <div className="flex items-center gap-2 bg-white/50 backdrop-blur-md px-3 py-1.5 rounded-full border border-slate-100 shadow-sm">
+           <div className={`w-2 h-2 rounded-full ${
+             syncError ? 'bg-red-500 animate-pulse shadow-[0_0_8px_red]' : 
+             isSyncing ? 'bg-[#34c759] animate-pulse shadow-[0_0_8px_#34c759]' : 
+             'bg-[#34c759]'
+           }`} />
+           <span className={`text-[9px] font-black uppercase ${syncError ? 'text-red-500' : 'text-slate-400'}`}>
+             {syncError ? 'Sync Error' : 'Drive Sync'}
+           </span>
         </div>
       </header>
 
@@ -82,7 +88,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* 主要內容區 - 自動佔滿剩餘空間且禁止縱向捲動 */}
+      {/* 主要內容區 - 緊湊排列 */}
       <main className="flex-1 flex flex-col justify-center overflow-hidden relative">
         {filteredCards.length === 0 ? (
           <div className="text-center px-12 animate-in fade-in duration-700">
@@ -94,7 +100,7 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="w-full h-full flex flex-col justify-center">
-            <div className="flex gap-4 overflow-x-auto px-10 py-4 snap-x snap-mandatory scrollbar-hide">
+            <div className="flex gap-4 overflow-x-auto px-10 py-1 snap-x snap-mandatory scrollbar-hide">
               {filteredCards.map(card => (
                 <GiftCard 
                   key={card.id} 
@@ -108,9 +114,9 @@ export default function Dashboard() {
             
             {/* 水平捲動指示 */}
             {filteredCards.length > 1 && (
-              <div className="flex justify-center gap-1.5 mt-4">
+              <div className="flex justify-center gap-1.5 mt-4 opacity-50">
                  {filteredCards.map((_, i) => (
-                   <div key={i} className="w-1 h-1 rounded-full bg-slate-200" />
+                   <div key={i} className="w-1 h-1 rounded-full bg-slate-300" />
                  ))}
               </div>
             )}
@@ -118,30 +124,28 @@ export default function Dashboard() {
         )}
       </main>
 
-      {/* 底部導航列 - 固定高度 */}
-      <div className="h-24 bg-white/95 backdrop-blur-3xl border-t border-slate-100 shrink-0 z-30 flex justify-between items-center px-12">
+      {/* 底部導覽列 - 縮短高度 (h-20) 且純圖標 */}
+      <div className="h-20 bg-white/95 backdrop-blur-3xl border-t border-slate-100 shrink-0 z-30 flex justify-between items-center px-16">
         <div className="flex justify-between items-center w-full max-w-md mx-auto relative h-full">
           
-          <button className="flex flex-col items-center justify-center gap-1 text-[#34c759] active:scale-95 transition-all w-12">
-             <LayoutGrid size={22} strokeWidth={2.5} />
-             <span className="text-[10px] font-black mt-1">卡片</span>
+          <button className="text-[#34c759] active:scale-95 transition-all">
+             <Library size={28} strokeWidth={2.5} />
           </button>
 
-          <div className="absolute left-1/2 -translate-x-1/2 -top-6">
+          <div className="absolute left-1/2 -translate-x-1/2 -top-4">
              <Link 
                href="/scan"
-               className="bg-gradient-to-b from-[#34c759] to-[#28cd41] text-white w-16 h-16 rounded-full flex items-center justify-center shadow-xl shadow-[#34c759]/30 active:scale-90 transition-all border-4 border-white"
+               className="bg-gradient-to-b from-[#34c759] to-[#28cd41] text-white w-14 h-14 rounded-full flex items-center justify-center shadow-xl shadow-[#34c759]/30 active:scale-90 transition-all border-4 border-white"
              >
-               <ScanLine size={30} />
+               <ScanLine size={28} />
              </Link>
           </div>
 
           <Link 
             href="/settings"
-            className="flex flex-col items-center justify-center gap-1 text-slate-300 hover:text-slate-800 transition-all active:scale-95 w-12"
+            className="text-slate-300 hover:text-slate-800 transition-all active:scale-95"
           >
-             <Settings size={22} strokeWidth={2} />
-             <span className="text-[10px] font-black mt-1">設定</span>
+             <Settings size={28} strokeWidth={2} />
           </Link>
         </div>
       </div>

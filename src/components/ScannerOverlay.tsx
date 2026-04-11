@@ -1,6 +1,7 @@
 "use client";
 
 import { X, CheckCircle2, AlertTriangle, Plus } from "lucide-react";
+import { ScanState } from "@/hooks/useScanner";
 
 interface ScannerOverlayProps {
   scanState: ScanState;
@@ -97,7 +98,7 @@ export default function ScannerOverlay({
                   onClick={onFinish}
                   className="w-full bg-slate-900 text-[#34c759] font-black py-6 rounded-full active:scale-95 transition-all flex items-center justify-center gap-2 uppercase tracking-widest text-lg shadow-2xl"
                 >
-                  結束並返回
+                  結束掃描
                 </button>
              </div>
           ) : (

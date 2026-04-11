@@ -12,9 +12,11 @@ interface AuthStore {
   loading: boolean;
   isSyncing: boolean;
   lastSync: number | null;
+  syncError: boolean;
   setUser: (user: User | null) => void;
   setLoading: (loading: boolean) => void;
   setSyncStatus: (isSyncing: boolean, lastSync: number | null) => void;
+  setSyncError: (error: boolean) => void;
 }
 
 export const useAuthStore = create<AuthStore>((set) => ({
@@ -22,7 +24,9 @@ export const useAuthStore = create<AuthStore>((set) => ({
   loading: true,
   isSyncing: false,
   lastSync: null,
+  syncError: false,
   setUser: (user) => set({ user, loading: false }),
   setLoading: (loading) => set({ loading }),
   setSyncStatus: (isSyncing, lastSync) => set({ isSyncing, lastSync }),
+  setSyncError: (error) => set({ syncError: error }),
 }));

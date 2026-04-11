@@ -19,7 +19,6 @@ export function useScanner(elementId: string) {
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const dataRef = useRef<BarcodeData>({ primary: null, secondary: null });
 
-  // 震動回饋輔助函式
   const triggerVibrate = (pattern: number | number[]) => {
     if (typeof window !== "undefined" && "vibrate" in navigator) {
       navigator.vibrate(pattern);
@@ -27,100 +26,103 @@ export function useScanner(elementId: string) {
   };
 
   const stopScanning = useCallback(async () => {
-    if (scannerRef.current && scannerRef.current.isScanning) {
+    if (scannerRef.current) {
       try {
-        await scannerRef.current.stop();
-        scannerRef.current.clear();
+        if (scannerRef.current.isScanning) {
+          await scannerRef.current.stop();
+        }
+        await scannerRef.current.clear();
       } catch (err) {
-        console.error("終止掃描失敗", err);
+        // Quietly fail stop
       }
+      scannerRef.current = null;
     }
     setScanState("idle");
   }, []);
 
   const startScanning = useCallback(async () => {
-    try {
-      if (scannerRef.current && scannerRef.current.isScanning) {
-        await stopScanning();
-      }
+    // 延遲啟動以確保 Next.js DOM 已完全掛載
+    setTimeout(async () => {
+      try {
+        if (scannerRef.current) {
+          await stopScanning();
+        }
 
-      setErrorMsg(null);
-      setScanState("scanning-a");
-      dataRef.current = { primary: null, secondary: null };
-      setData({ primary: null, secondary: null });
+        setErrorMsg(null);
+        setScanState("scanning-a");
+        dataRef.current = { primary: null, secondary: null };
+        setData({ primary: null, secondary: null });
 
-      const html5Qrcode = new Html5Qrcode(elementId);
-      scannerRef.current = html5Qrcode;
+        const html5Qrcode = new Html5Qrcode(elementId);
+        scannerRef.current = html5Qrcode;
 
-      await html5Qrcode.start(
-        { facingMode: "environment" }, 
-        {
-          fps: 20, // 提升至每秒 20 幀
-          qrbox: (viewfinderWidth, viewfinderHeight) => {
-             // 動態計算掃描框，更適合長條形狀
-             return { width: Math.min(viewfinderWidth * 0.8, 320), height: 120 };
+        await html5Qrcode.start(
+          { 
+            facingMode: "environment",
+            width: { min: 640, ideal: 1280 },
+            height: { min: 480, ideal: 720 }
+          }, 
+          {
+            fps: 30, // 追求極速反應
+            // 重點：不提供 qrbox 參數，讓掃描引擎進行全螢幕辨識 (增加容錯率)
+            formatsToSupport: [
+              Html5QrcodeSupportedFormats.CODE_128,
+              Html5QrcodeSupportedFormats.CODE_39,
+              Html5QrcodeSupportedFormats.CODE_93,
+              Html5QrcodeSupportedFormats.EAN_13,
+              Html5QrcodeSupportedFormats.EAN_8,
+              Html5QrcodeSupportedFormats.ITF,
+              Html5QrcodeSupportedFormats.UPC_A,
+              Html5QrcodeSupportedFormats.UPC_E,
+              Html5QrcodeSupportedFormats.QR_CODE,
+              Html5QrcodeSupportedFormats.DATA_MATRIX,
+            ]
           },
-          aspectRatio: 1.77777778, // 16:9 比例，適合水平條碼
-          formatsToSupport: [
-            Html5QrcodeSupportedFormats.CODE_128,
-            Html5QrcodeSupportedFormats.CODE_39,
-            Html5QrcodeSupportedFormats.CODE_93,
-            Html5QrcodeSupportedFormats.EAN_13,
-            Html5QrcodeSupportedFormats.EAN_8,
-            Html5QrcodeSupportedFormats.ITF,
-            Html5QrcodeSupportedFormats.UPC_A,
-            Html5QrcodeSupportedFormats.UPC_E,
-            Html5QrcodeSupportedFormats.QR_CODE,
-          ]
-        },
-        (decodedText) => {
-          const currentData = dataRef.current;
-          
-          if (!currentData.primary) {
-            // 掃到第一個條碼 (A)
-            triggerVibrate(60); 
-            currentData.primary = decodedText;
-            setData({ ...currentData });
-
-            if (!isDualMode) {
-              // 單條碼模式：直接成功
-              setScanState("success");
-              stopScanning();
-            } else {
-              // 雙條碼模式：進入 B 階段
-              setScanState("scanning-b");
-              html5Qrcode.pause();
-              setTimeout(() => {
-                if (scannerRef.current && scannerRef.current.isScanning) {
-                  scannerRef.current.resume();
-                }
-              }, 1200);
-            }
-          } else if (isDualMode && !currentData.secondary) {
-            if (decodedText === currentData.primary) {
-              // 掃到重複條碼：顯示警告但不中斷
-              setScanState("duplicate");
-              triggerVibrate([50, 50, 50]);
-              setTimeout(() => {
-                if (dataRef.current.secondary) return;
-                setScanState("scanning-b");
-              }, 1500);
-            } else {
-              // 掃到第二個不同條碼 (B)
-              triggerVibrate([100, 50, 100]);
-              currentData.secondary = decodedText;
+          (decodedText) => {
+            const currentData = dataRef.current;
+            
+            if (!currentData.primary) {
+              triggerVibrate(60); 
+              currentData.primary = decodedText;
               setData({ ...currentData });
-              setScanState("success");
-              stopScanning();
+
+              if (!isDualMode) {
+                setScanState("success");
+                stopScanning();
+              } else {
+                setScanState("scanning-b");
+                html5Qrcode.pause();
+                setTimeout(() => {
+                  if (scannerRef.current && scannerRef.current.isScanning) {
+                    scannerRef.current.resume();
+                  }
+                }, 1000);
+              }
+            } else if (isDualMode && !currentData.secondary) {
+              if (decodedText === currentData.primary) {
+                setScanState("duplicate");
+                triggerVibrate([50, 50, 50]);
+                setTimeout(() => {
+                  if (dataRef.current.secondary) return;
+                  setScanState("scanning-b");
+                }, 1500);
+              } else {
+                triggerVibrate([100, 50, 100]);
+                currentData.secondary = decodedText;
+                setData({ ...currentData });
+                setScanState("success");
+                stopScanning();
+              }
             }
-          }
-        },
-        () => {}
-      );
-    } catch (err: any) {
-      setErrorMsg(err?.message || "相機啟動異常");
-      setScanState("error");
-    }
+          },
+          () => {} // Quietly ignore frame failures
+        );
+      } catch (err: any) {
+        console.error("Scanner start failed:", err);
+        setErrorMsg(err?.message || "相機啟動失敗，請確認是否授予權限或環境光線是否過暗");
+        setScanState("error");
+      }
+    }, 350); // 350ms 穩定 DOM
   }, [elementId, stopScanning, isDualMode]);
 
   const skipSecondary = useCallback(() => {
@@ -145,3 +147,4 @@ export function useScanner(elementId: string) {
     skipSecondary
   };
 }
+

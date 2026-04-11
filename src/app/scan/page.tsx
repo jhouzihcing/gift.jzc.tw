@@ -17,7 +17,7 @@ export default function ScanPage() {
     errorMsg, 
     isDualMode, 
     setIsDualMode, 
-    resetScanner,
+    resetData,
     skipSecondary 
   } = useScanner("reader-video");
   
@@ -29,6 +29,13 @@ export default function ScanPage() {
   const [amount, setAmount] = useState<number | "">("");
   const [isBatch, setIsBatch] = useState(true);
 
+  // 初始化模式偏好
+  useEffect(() => {
+    const savedMode = localStorage.getItem("sgcm-scan-mode");
+    if (savedMode === "dual") setIsDualMode(true);
+    else if (savedMode === "single") setIsDualMode(false);
+  }, [setIsDualMode]);
+
   const handleStart = () => {
     if (!amount || Number(amount) <= 0) {
       alert("請輸入正確的面額！");
@@ -39,6 +46,27 @@ export default function ScanPage() {
       return;
     }
     setIsReadyToScan(true);
+  };
+
+  // 當商家改變時的智能切換
+  const handleMerchantChange = (m: string) => {
+    if (m === "其它自訂") {
+      setIsCustomMode(true);
+      setMerchant("");
+    } else {
+      setIsCustomMode(false);
+      setMerchant(m);
+      if (m === "7-11") {
+        setIsDualMode(true);
+      }
+    }
+  };
+
+  // 儲存用戶手動切換的偏好
+  const toggleDualMode = () => {
+    const nextMode = !isDualMode;
+    setIsDualMode(nextMode);
+    localStorage.setItem("sgcm-scan-mode", nextMode ? "dual" : "single");
   };
 
   useEffect(() => {
@@ -65,19 +93,18 @@ export default function ScanPage() {
       });
 
       if (isBatch) {
-        // 連續掃描模式：不重啟硬體，只重置辨識狀態
-        const timer = setTimeout(() => { resetScanner(); }, 1800);
+        // v1.1.6: 邏輯級重置，相機永不關閉
+        const timer = setTimeout(() => { resetData(); }, 1500);
         return () => clearTimeout(timer);
       } else {
-        // 單張掃描模式：關閉相機並返回
         const timer = setTimeout(() => {
           stopScanning();
           router.push("/dashboard");
-        }, 1800);
+        }, 1500);
         return () => clearTimeout(timer);
       }
     }
-  }, [scanState, addCard, data, router, isBatch, merchant, isCustomMode, amount, resetScanner, stopScanning]);
+  }, [scanState, addCard, data, router, isBatch, merchant, isCustomMode, amount, resetData, stopScanning]);
 
   const handleClose = () => {
     if (isReadyToScan) {
@@ -91,7 +118,6 @@ export default function ScanPage() {
     return (
       <div className="min-h-[100dvh] bg-white flex flex-col items-center justify-center p-6 text-gray-900 font-sans">
          <div className="w-full max-w-sm flex flex-col gap-6 relative">
-            {/* 背景霓虹光暈 */}
             <div className="absolute top-[-10%] left-[-10%] w-[40vw] h-[40vw] bg-[#00F5FF]/5 rounded-full blur-3xl pointer-events-none" />
 
             <button onClick={() => router.back()} className="self-start text-gray-400 hover:text-gray-900 transition-colors p-2 -ml-2 z-10">
@@ -110,15 +136,7 @@ export default function ScanPage() {
                   {["7-11", ...customMerchants, "其它自訂"].map((m) => (
                     <button
                       key={m}
-                      onClick={() => {
-                        if (m === "其它自訂") {
-                          setIsCustomMode(true);
-                          setMerchant("");
-                        } else {
-                          setIsCustomMode(false);
-                          setMerchant(m);
-                        }
-                      }}
+                      onClick={() => handleMerchantChange(m)}
                       className={`shrink-0 px-6 py-4 rounded-3xl font-black transition-all snap-start border-2 text-sm ${
                         (isCustomMode && m === "其它自訂") || (!isCustomMode && merchant === m)
                           ? "bg-gray-900 text-[#00F5FF] border-gray-900 shadow-xl shadow-gray-900/10" 
@@ -156,7 +174,7 @@ export default function ScanPage() {
                  <div className="flex flex-col gap-2">
                     <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">掃描模式</label>
                     <button 
-                      onClick={() => setIsDualMode(!isDualMode)}
+                      onClick={toggleDualMode}
                       className={`w-full h-full flex items-center justify-center gap-2 rounded-[2rem] border-2 transition-all font-bold ${
                         isDualMode ? "bg-[#00F5FF]/10 border-[#00F5FF] text-[#00c5cc]" : "bg-gray-50 border-gray-100 text-gray-500"
                       }`}

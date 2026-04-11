@@ -46,13 +46,15 @@ export default function ScannerOverlay({ scanState, onClose, onSkipSecondary, is
            )}
            
            {scanState === "success" && (
-             <div className="absolute inset-0 flex items-center justify-center backdrop-blur-sm animate-in zoom-in duration-300">
-                <CheckCircle2 size={64} className="text-green-500 fill-white" />
+             <div className="absolute inset-0 bg-green-500/20 flex items-center justify-center backdrop-blur-sm animate-in fade-in duration-300">
+                <div className="bg-white rounded-full p-4 shadow-2xl animate-in zoom-in duration-500">
+                   <CheckCircle2 size={64} className="text-green-500" />
+                </div>
              </div>
            )}
 
            {scanState === "duplicate" && (
-             <div className="absolute inset-0 flex items-center justify-center animate-in shake duration-300">
+             <div className="absolute inset-0 bg-amber-500/10 flex items-center justify-center animate-in shake duration-300">
                 <AlertTriangle size={64} className="text-amber-500 fill-white" />
              </div>
            )}

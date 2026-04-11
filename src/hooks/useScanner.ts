@@ -20,6 +20,7 @@ export function useScanner(elementId: string) {
   const dataRef = useRef<BarcodeData>({ primary: null, secondary: null });
   const isInitializing = useRef(false);
   const isMounted = useRef(true);
+  const isProcessing = useRef(false); // 核心：代碼級別的鎖，取代硬體暫停
 
   const triggerVibrate = (pattern: number | number[]) => {
     if (typeof window !== "undefined" && "vibrate" in navigator) {
@@ -28,6 +29,7 @@ export function useScanner(elementId: string) {
   };
 
   const stopScanning = useCallback(async () => {
+    isProcessing.current = false;
     if (scannerRef.current) {
       try {
         if (scannerRef.current.isScanning) {
@@ -36,21 +38,18 @@ export function useScanner(elementId: string) {
         const container = document.getElementById(elementId);
         if (container) container.innerHTML = ""; 
       } catch (err) {
-        // Quietly fail
+        // Quiet fail
       }
       scannerRef.current = null;
     }
     if (isMounted.current) setScanState("idle");
   }, [elementId]);
 
-  // 重置掃描狀態而不關閉相機 (關鍵修復：用於連續掃描模式)
-  const resetScanner = useCallback(() => {
+  const resetData = useCallback(() => {
     dataRef.current = { primary: null, secondary: null };
     setData({ primary: null, secondary: null });
     setScanState("scanning-a");
-    if (scannerRef.current && scannerRef.current.isPaused()) {
-      scannerRef.current.resume();
-    }
+    isProcessing.current = false;
   }, []);
 
   const startScanning = useCallback(async () => {
@@ -64,6 +63,7 @@ export function useScanner(elementId: string) {
 
         setErrorMsg(null);
         setScanState("scanning-a");
+        isProcessing.current = false;
         dataRef.current = { primary: null, secondary: null };
         setData({ primary: null, secondary: null });
 
@@ -73,7 +73,7 @@ export function useScanner(elementId: string) {
         await html5Qrcode.start(
           { facingMode: "environment" }, 
           {
-            fps: 18,
+            fps: 20,
             aspectRatio: 1.77777778,
             formatsToSupport: [
               Html5QrcodeSupportedFormats.CODE_128,
@@ -89,62 +89,65 @@ export function useScanner(elementId: string) {
             ]
           },
           (decodedText) => {
-            const currentData = dataRef.current;
-            if (scanState === "success") return; // 防止重複觸發
+            if (isProcessing.current || !isMounted.current) return;
 
+            const currentData = dataRef.current;
+            
             if (!currentData.primary) {
               triggerVibrate(60); 
               currentData.primary = decodedText;
               setData({ ...currentData });
 
               if (!isDualMode) {
+                isProcessing.current = true; // 鎖定辨識
                 setScanState("success");
-                // 這裡移除自動 stopScanning，交給 UI 決定
-                if (scannerRef.current) scannerRef.current.pause();
               } else {
                 setScanState("scanning-b");
-                html5Qrcode.pause();
+                isProcessing.current = true;
+                // 模擬暫停：1.5秒內不准辨識下一組
                 setTimeout(() => {
-                  if (scannerRef.current && scannerRef.current.isScanning) {
-                    scannerRef.current.resume();
-                  }
-                }, 1000);
+                   if (isMounted.current) isProcessing.current = false;
+                }, 1500);
               }
             } else if (isDualMode && !currentData.secondary) {
               if (decodedText === currentData.primary) {
+                isProcessing.current = true;
                 setScanState("duplicate");
                 triggerVibrate([50, 50, 50]);
                 setTimeout(() => {
                   if (dataRef.current.secondary) return;
-                  if (isMounted.current) setScanState("scanning-b");
-                }, 1500);
+                  if (isMounted.current) {
+                    setScanState("scanning-b");
+                    isProcessing.current = false;
+                  }
+                }, 1800);
               } else {
+                isProcessing.current = true;
                 triggerVibrate([100, 50, 100]);
                 currentData.secondary = decodedText;
                 setData({ ...currentData });
                 setScanState("success");
-                if (scannerRef.current) scannerRef.current.pause();
               }
             }
           },
           () => {} 
         );
       } catch (err: any) {
-        console.error("Camera error:", err);
+        console.error("Camera startup failed:", err);
         if (isMounted.current) {
-          setErrorMsg(err?.message || "無法啟動相機。");
+          setErrorMsg("相機啟動失敗，請確認是否被其他 App 佔用或權限已關閉。");
           setScanState("error");
         }
       } finally {
         isInitializing.current = false;
       }
-    }, 450); 
-  }, [elementId, stopScanning, isDualMode, scanState]);
+    }, 400); 
+  }, [elementId, stopScanning, isDualMode]);
 
   const skipSecondary = useCallback(() => {
     if (dataRef.current.primary) {
+      isProcessing.current = true;
       setScanState("success");
-      if (scannerRef.current) scannerRef.current.pause();
     }
   }, []);
 
@@ -164,10 +167,11 @@ export function useScanner(elementId: string) {
     setIsDualMode,
     startScanning,
     stopScanning,
-    resetScanner,
+    resetData,
     skipSecondary
   };
 }
+
 
 
 

@@ -14,7 +14,8 @@ export interface Card {
 interface CardStore {
   cards: Card[];
   isPro: boolean;
-  customMerchants: string[]; // 存放使用者自訂的商家列表
+  isInitialized: boolean;
+  customMerchants: string[];
   addCard: (newCard: Card) => boolean;
   setCards: (cards: Card[]) => void;
   setProStatus: (isPro: boolean) => void;
@@ -22,13 +23,16 @@ interface CardStore {
   restoreFromTrash: (id: string) => void;
   deletePermanently: (id: string) => void;
   addCustomMerchant: (merchant: string) => void;
+  finishInitialization: () => void;
 }
 
 export const useCardStore = create<CardStore>((set, get) => ({
   cards: [],
   isPro: false,
+  isInitialized: false,
   customMerchants: [],
   
+  finishInitialization: () => set({ isInitialized: true }),
   addCard: (newCard) => {
     const { cards, isPro } = get();
     

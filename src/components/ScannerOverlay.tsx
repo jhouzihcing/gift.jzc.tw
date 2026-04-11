@@ -95,9 +95,9 @@ export default function ScannerOverlay({
                 </button>
                 <button 
                   onClick={onFinish}
-                  className="w-full bg-slate-900 text-[#34c759] font-black py-4 rounded-full active:scale-95 transition-all flex items-center justify-center gap-2 uppercase tracking-widest text-[10px]"
+                  className="w-full bg-slate-900 text-[#34c759] font-black py-6 rounded-full active:scale-95 transition-all flex items-center justify-center gap-2 uppercase tracking-widest text-lg shadow-2xl"
                 >
-                  完成並返回
+                  結束並返回
                 </button>
              </div>
           ) : (

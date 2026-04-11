@@ -7,7 +7,7 @@ import { findBackupFile, downloadBackup, uploadBackup } from "@/lib/gdrive";
 
 export function useDriveSync() {
   const { user, setSyncStatus } = useAuthStore();
-  const { cards, customMerchants, setCards } = useCardStore();
+  const { cards, customMerchants, setCards, isInitialized, finishInitialization } = useCardStore();
   const fileIdRef = useRef<string | null>(null);
   
   // 1. 初始化：登入後自動從雲端載入最新存檔
@@ -36,15 +36,17 @@ export function useDriveSync() {
       } catch (error) {
         console.error("GDrive Init Sync Error:", error);
         setSyncStatus(false, null);
+      } finally {
+        finishInitialization(); // 標記初始化完成，允許啟動自動備份
       }
     };
 
     initSync();
-  }, [user?.driveToken, setCards, setSyncStatus]);
+  }, [user?.driveToken, setCards, setSyncStatus, finishInitialization]);
 
   // 2. 自動備份：當卡片資料變動時，防抖上傳至雲端
   useEffect(() => {
-    if (!user?.driveToken) return;
+    if (!user?.driveToken || !isInitialized) return;
     
     const timer = setTimeout(async () => {
       try {
@@ -64,7 +66,7 @@ export function useDriveSync() {
     }, 5000);
 
     return () => clearTimeout(timer);
-  }, [cards, customMerchants, user?.driveToken, setSyncStatus]);
+  }, [cards, customMerchants, user?.driveToken, setSyncStatus, isInitialized]);
 
   return null;
 }

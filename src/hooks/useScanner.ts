@@ -73,8 +73,9 @@ export function useScanner(elementId: string) {
         await html5Qrcode.start(
           { facingMode: "environment" }, 
           {
-            fps: 20,
+            fps: 30,
             aspectRatio: 1.77777778,
+            disableFlip: true, // 一維條碼不需要鏡像翻轉，節省 CPU
             formatsToSupport: [
               Html5QrcodeSupportedFormats.CODE_128,
               Html5QrcodeSupportedFormats.CODE_39,

@@ -17,6 +17,7 @@ export default function ScanPage() {
     errorMsg, 
     isDualMode, 
     setIsDualMode, 
+    resetScanner,
     skipSecondary 
   } = useScanner("reader-video");
   
@@ -52,7 +53,7 @@ export default function ScanPage() {
   useEffect(() => {
     if (scanState === "success") {
       const finalMerchant = isCustomMode && !merchant.trim() ? "未命名商家" : merchant;
-      const isSuccess = addCard({
+      addCard({
         id: crypto.randomUUID(),
         merchant: finalMerchant,
         name: finalMerchant === "7-11" ? "統一超商商品卡" : `${finalMerchant} 禮物卡`,
@@ -64,17 +65,19 @@ export default function ScanPage() {
       });
 
       if (isBatch) {
-        const timer = setTimeout(() => { startScanning(); }, 1800);
+        // 連續掃描模式：不重啟硬體，只重置辨識狀態
+        const timer = setTimeout(() => { resetScanner(); }, 1800);
         return () => clearTimeout(timer);
       } else {
+        // 單張掃描模式：關閉相機並返回
         const timer = setTimeout(() => {
-          if (isSuccess) router.push("/dashboard");
-          else setIsReadyToScan(false); 
+          stopScanning();
+          router.push("/dashboard");
         }, 1800);
         return () => clearTimeout(timer);
       }
     }
-  }, [scanState, addCard, data, router, isBatch, merchant, isCustomMode, amount, startScanning]);
+  }, [scanState, addCard, data, router, isBatch, merchant, isCustomMode, amount, resetScanner, stopScanning]);
 
   const handleClose = () => {
     if (isReadyToScan) {

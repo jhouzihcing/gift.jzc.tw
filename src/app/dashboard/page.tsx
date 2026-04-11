@@ -1,3 +1,5 @@
+"use client";
+
 import { useAuthStore } from "@/store/useAuthStore";
 import { useCardStore } from "@/store/useCardStore";
 import { useRouter } from "next/navigation";
@@ -115,17 +117,6 @@ export default function Dashboard() {
           >
              <Settings size={24} strokeWidth={2} />
              <span className="text-[10px] font-black mt-1 uppercase tracking-tighter">Settings</span>
-          </button>
-          
-        </div>
-      </div>
-    </div>
-  );
-}
--center justify-center gap-1 text-gray-400 hover:text-gray-800 transition-colors active:scale-95 w-[4.5rem]"
-          >
-             <Settings size={24} strokeWidth={2} />
-             <span className="text-[10px] font-bold mt-1">設定</span>
           </button>
           
         </div>

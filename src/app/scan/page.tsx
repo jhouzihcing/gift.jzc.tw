@@ -78,6 +78,7 @@ export default function ScanPage() {
     return () => { stopScanning(); };
   }, [isReadyToScan, startScanning, stopScanning]);
 
+  // v1.1.7 自動存檔邏輯
   useEffect(() => {
     if (scanState === "success") {
       const finalMerchant = isCustomMode && !merchant.trim() ? "未命名商家" : merchant;
@@ -91,20 +92,17 @@ export default function ScanPage() {
         createdAt: Date.now(),
         deletedAt: null,
       });
-
-      if (isBatch) {
-        // v1.1.6: 邏輯級重置，相機永不關閉
-        const timer = setTimeout(() => { resetData(); }, 1500);
-        return () => clearTimeout(timer);
-      } else {
-        const timer = setTimeout(() => {
-          stopScanning();
-          router.push("/dashboard");
-        }, 1500);
-        return () => clearTimeout(timer);
-      }
     }
-  }, [scanState, addCard, data, router, isBatch, merchant, isCustomMode, amount, resetData, stopScanning]);
+  }, [scanState, addCard, data, merchant, isCustomMode, amount]);
+
+  const handleNext = () => {
+    resetData();
+  };
+
+  const handleFinish = () => {
+    stopScanning();
+    router.push("/dashboard");
+  };
 
   const handleClose = () => {
     if (isReadyToScan) {
@@ -117,7 +115,7 @@ export default function ScanPage() {
   if (!isReadyToScan) {
     return (
       <div className="min-h-[100dvh] bg-white flex flex-col items-center justify-center p-6 text-gray-900 font-sans">
-         <div className="w-full max-w-sm flex flex-col gap-6 relative">
+         <div className="w-full max-sm flex flex-col gap-6 relative">
             <div className="absolute top-[-10%] left-[-10%] w-[40vw] h-[40vw] bg-[#00F5FF]/5 rounded-full blur-3xl pointer-events-none" />
 
             <button onClick={() => router.back()} className="self-start text-gray-400 hover:text-gray-900 transition-colors p-2 -ml-2 z-10">
@@ -126,7 +124,7 @@ export default function ScanPage() {
             
             <div className="text-left z-10">
               <h1 className="text-3xl font-black tracking-tight text-gray-900">準備掃描</h1>
-              <p className="text-sm text-gray-500 mt-2 font-semibold">設定商家與掃描模式</p>
+              <p className="text-sm text-gray-500 mt-2 font-semibold">先輸入金額，再開啟相機一次掃完卡片</p>
             </div>
 
             <div className="space-y-5 z-10">
@@ -159,49 +157,36 @@ export default function ScanPage() {
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                 <div className="flex flex-col gap-2">
-                   <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">卡片面額</label>
-                   <input 
-                     type="number" 
-                     placeholder="500" 
-                     value={amount}
-                     onChange={(e) => setAmount(Number(e.target.value))}
-                     className="w-full bg-white border border-gray-200 rounded-[2rem] px-6 py-5 text-xl font-bold text-gray-900 outline-none focus:border-[#00F5FF] focus:ring-4 focus:ring-[#00F5FF]/5 shadow-sm transition-all"
-                   />
-                 </div>
-                 
-                 <div className="flex flex-col gap-2">
-                    <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">掃描模式</label>
-                    <button 
-                      onClick={toggleDualMode}
-                      className={`w-full h-full flex items-center justify-center gap-2 rounded-[2rem] border-2 transition-all font-bold ${
-                        isDualMode ? "bg-[#00F5FF]/10 border-[#00F5FF] text-[#00c5cc]" : "bg-gray-50 border-gray-100 text-gray-500"
-                      }`}
-                    >
-                      {isDualMode ? <Layers size={20}/> : <Minus size={20}/>}
-                      {isDualMode ? "雙條碼" : "單條碼"}
-                    </button>
-                 </div>
+              <div className="flex flex-col gap-2">
+                 <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">卡片面額 (即將掃描的這一批)</label>
+                 <input 
+                   type="number" 
+                   placeholder="500" 
+                   value={amount}
+                   onChange={(e) => setAmount(Number(e.target.value))}
+                   className="w-full bg-white border border-gray-200 rounded-[2rem] px-6 py-5 text-4xl font-black text-gray-900 outline-none focus:border-[#00F5FF] focus:ring-4 focus:ring-[#00F5FF]/5 shadow-sm transition-all placeholder:text-gray-100"
+                 />
               </div>
 
-              <div className="flex items-center justify-between bg-gray-50 p-5 rounded-[2.5rem] mt-4 border border-gray-100">
-                 <div>
-                    <h3 className="font-black text-gray-800">連續掃描模式</h3>
-                    <p className="text-[10px] text-gray-400 mt-0.5 font-bold">成功後直接進入下一張</p>
+              <div className="bg-gray-50 p-6 rounded-[2.5rem] mt-4 border border-gray-100">
+                 <div className="flex items-center justify-between mb-4">
+                    <div>
+                       <h3 className="font-black text-gray-800 text-sm">智慧雙條碼模式</h3>
+                       <p className="text-[10px] text-gray-400 mt-1 font-bold">偵測到 7-11 時將自動開啟兩段辨識</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" checked={isDualMode} onChange={toggleDualMode} className="sr-only peer" />
+                      <div className="w-14 h-7 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-7 after:transition-all peer-checked:bg-gray-900 shadow-inner"></div>
+                    </label>
                  </div>
-                 <label className="relative inline-flex items-center cursor-pointer">
-                   <input type="checkbox" checked={isBatch} onChange={(e) => setIsBatch(e.target.checked)} className="sr-only peer" />
-                   <div className="w-14 h-7 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-7 after:transition-all peer-checked:bg-gray-900 shadow-inner"></div>
-                 </label>
               </div>
             </div>
 
             <button 
               onClick={handleStart}
-              className="w-full mt-8 bg-gray-900 text-white font-black rounded-[2.5rem] py-6 flex items-center justify-center gap-3 transition-all hover:bg-gray-800 active:scale-95 shadow-2xl shadow-gray-900/20 z-10 text-lg"
+              className="w-full mt-8 bg-gray-900 text-white font-black rounded-[2.5rem] py-6 flex items-center justify-center gap-3 transition-all hover:bg-gray-800 active:scale-95 shadow-2xl shadow-gray-900/20 z-10 text-xl"
             >
-              <ScanLine size={28} className="text-[#00F5FF]" /> 開啟相機掃描
+              <ScanLine size={28} className="text-[#00F5FF]" /> 開始批量掃描
             </button>
 
          </div>
@@ -219,7 +204,9 @@ export default function ScanPage() {
          scanState={scanState} 
          onClose={handleClose} 
          onSkipSecondary={skipSecondary} 
-         isBatch={isBatch} 
+         onNext={handleNext}
+         onFinish={handleFinish}
+         amount={amount}
        />
 
        {/* 錯誤恢復介面 */}
@@ -229,40 +216,24 @@ export default function ScanPage() {
               <ScanLine size={32} className="text-red-500" />
             </div>
             <h2 className="text-white text-xl font-black mb-2">相機啟動失敗</h2>
-            <p className="text-gray-400 text-sm mb-8 leading-relaxed">
-              {errorMsg || "這可能是因為相機權限被拒絕，或是其他應用程式正在佔用相機。"}
-            </p>
-            <div className="flex flex-col w-full gap-3">
+            <div className="flex flex-col w-full gap-3 mt-8">
               <button 
                 onClick={() => startScanning()}
-                className="w-full bg-[#00F5FF] text-gray-900 font-black py-4 rounded-2xl active:scale-95 transition-all"
+                className="w-full bg-[#00F5FF] text-gray-900 font-black py-4 rounded-2xl"
               >
-                嘗試重新啟動
+                嘗試重啟
               </button>
               <button 
                 onClick={handleClose}
-                className="w-full bg-white/10 text-white font-bold py-4 rounded-2xl active:scale-95 transition-all"
+                className="w-full bg-white/10 text-white font-bold py-4 rounded-2xl"
               >
-                返回設定
+                返回
               </button>
             </div>
-         </div>
-       )}
-       
-       {/* 頂部狀態顯示 (浮動在 Overlay 之上) */}
-       {scanState !== "error" && (
-         <div className="absolute top-10 left-0 right-0 px-6 z-[60] flex justify-between items-center pointer-events-none">
-            <div className="hidden md:block" />
-            <div className="bg-black/40 backdrop-blur-xl border border-white/10 px-6 py-2 rounded-full flex items-center gap-3 shadow-2xl">
-               <div className={`w-2 h-2 rounded-full ${scanState === "success" ? "bg-green-500" : "bg-red-500 animate-pulse"}`} />
-               <span className="text-white font-black text-xs tracking-tighter uppercase">
-                 {scanState === "success" ? "Success" : isDualMode ? "Dual Scan Mode" : "Single Scan Mode"}
-               </span>
-            </div>
-            <div className="hidden md:block" />
          </div>
        )}
     </div>
   );
 }
+
 

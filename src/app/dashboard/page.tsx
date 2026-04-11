@@ -5,6 +5,7 @@ import { useCardStore } from "@/store/useCardStore";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useMemo } from "react";
 import { ScanLine, CreditCard, Trash2, Store, Settings } from "lucide-react";
+import Barcode from "react-barcode";
 
 export default function Dashboard() {
   const { user, loading } = useAuthStore();
@@ -20,9 +21,12 @@ export default function Dashboard() {
   }, [user, loading, router]);
 
   const displayCards = useMemo(() => {
-    return cards
+    const list = cards
       .filter((c) => c.deletedAt === null && c.merchant === activeTab)
       .sort((a, b) => a.amount - b.amount);
+    
+    // 如果目前 Tab 沒資料，且只有點選 7-11，自動切換到有資料的第一個（若有）
+    return list;
   }, [cards, activeTab]);
 
   const merchants = useMemo(() => {
@@ -31,7 +35,7 @@ export default function Dashboard() {
     return Array.from(new Set([...defaultMerchants, ...existing]));
   }, [cards]);
 
-  if (loading || !user) return <div className="min-h-[100dvh] bg-white flex items-center justify-center font-black tracking-widest text-gray-900 animate-pulse text-lg">LOADING...</div>;
+  if (loading || !user) return <div className="min-h-[100dvh] bg-white flex flex-col items-center justify-center font-black tracking-widest text-gray-900 animate-pulse text-lg">LOADING SGCM...</div>;
 
   return (
     <div className="min-h-[100dvh] bg-white pb-32 relative text-gray-900 font-sans">
@@ -84,27 +88,49 @@ export default function Dashboard() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-10">
             {displayCards.map((card) => (
-              <div key={card.id} className="relative bg-white rounded-[1.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] overflow-hidden flex flex-col items-center p-8 border border-gray-100 transition-all hover:-translate-y-2 hover:shadow-[0_40px_80px_-20px_rgba(0,0,0,0.15)]">
+              <div key={card.id} className="relative bg-white rounded-[2rem] shadow-[0_30px_70px_-20px_rgba(0,0,0,0.12)] overflow-hidden flex flex-col items-center p-8 border border-gray-100 transition-all hover:shadow-[0_40px_90px_-20px_rgba(0,0,0,0.2)]">
                  
                  {/* 商家與價格標題 */}
-                 <div className="w-full text-center space-y-4 mb-6">
-                    <h3 className="text-2xl font-black text-gray-800 tracking-tight">{card.merchant}</h3>
-                    <h2 className="text-4xl font-black text-gray-900 tracking-tighter">${card.amount}</h2>
+                 <div className="w-full text-center space-y-2 mb-6">
+                    <h3 className="text-xl font-black text-gray-400 tracking-widest uppercase">{card.merchant}</h3>
+                    <h2 className="text-5xl font-black text-gray-900 tracking-tighter flex items-center justify-center gap-1">
+                      <span className="text-xl opacity-30">$</span>{card.amount}
+                    </h2>
                  </div>
 
                  <div className="w-full h-[1px] bg-gray-100 mb-8" />
 
-                 {/* 條碼區域 */}
-                 <div className="w-full flex flex-col gap-6 items-center">
-                    <div className="space-y-1 text-center">
-                       <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">條碼 1</p>
-                       <p className="text-xl font-bold font-mono tracking-widest text-gray-900">{card.barcode}</p>
+                 {/* 條碼渲染區域 */}
+                 <div className="w-full flex flex-col gap-10 items-center overflow-hidden">
+                    <div className="flex flex-col items-center gap-2 w-full">
+                       <p className="text-[10px] text-gray-300 font-black uppercase tracking-[0.3em]">Barcode 1</p>
+                       <div className="bg-white p-2 border border-gray-50 rounded-lg w-full flex justify-center">
+                          <Barcode 
+                            value={card.barcode} 
+                            width={1.6} 
+                            height={60} 
+                            fontSize={14}
+                            margin={0}
+                            background="transparent"
+                            fontOptions="bold"
+                          />
+                       </div>
                     </div>
 
                     {card.secondaryBarcode && (
-                      <div className="space-y-1 text-center">
-                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">條碼 2</p>
-                        <p className="text-xl font-bold font-mono tracking-widest text-gray-900">{card.secondaryBarcode}</p>
+                      <div className="flex flex-col items-center gap-2 w-full">
+                        <p className="text-[10px] text-gray-300 font-black uppercase tracking-[0.3em]">Barcode 2</p>
+                        <div className="bg-white p-2 border border-gray-50 rounded-lg w-full flex justify-center">
+                          <Barcode 
+                            value={card.secondaryBarcode} 
+                            width={1.6} 
+                            height={60} 
+                            fontSize={14}
+                            margin={0}
+                            background="transparent"
+                            fontOptions="bold"
+                          />
+                        </div>
                       </div>
                     )}
                  </div>
@@ -116,17 +142,16 @@ export default function Dashboard() {
                        moveToTrash(card.id);
                      }
                    }}
-                   className="mt-10 w-full py-4 bg-[#E30613] text-white font-black rounded-full shadow-lg shadow-red-200 active:scale-95 transition-all text-sm tracking-widest"
+                   className="mt-12 w-full py-5 bg-[#E30613] text-white font-black rounded-3xl shadow-xl shadow-red-100 active:scale-95 transition-all text-xs tracking-[0.2em] uppercase"
                  >
-                   已無餘額
+                   已無餘額 / 刪除卡片
                  </button>
-
-                 <div className="absolute top-0 right-0 w-24 h-24 bg-gray-50/50 rounded-bl-[4rem] -z-10" />
               </div>
             ))}
           </div>
         )}
       </main>
+
 
 
 

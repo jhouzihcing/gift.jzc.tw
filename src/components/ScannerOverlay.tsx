@@ -9,44 +9,64 @@ interface Props {
   isBatch?: boolean;
 }
 
-export default function ScannerOverlay({ scanState, onClose, onSkipSecondary, isBatch }: Props) {
-  const getPromptMessage = () => {
-    switch (scanState) {
-      case "scanning-a": return "請將條碼對準框內";
-      case "scanning-b": return "請將第二組條碼 (密碼) 對準框內";
-      case "success": return isBatch ? "紀錄成功！即將換下一張..." : "掃描成功！即將返回...";
-      case "duplicate": return "重複掃描！請換另一組條碼";
-      case "error": return "相機啟動異常";
-      default: return "相機啟動中...";
-    }
-  };
+  onNext?: () => void;
+  onFinish?: () => void;
+  amount?: number | "";
+}
 
+export default function ScannerOverlay({ 
+  scanState, 
+  onClose, 
+  onSkipSecondary, 
+  onNext,
+  onFinish,
+  amount
+}: ScannerOverlayProps) {
   return (
-    <div className="absolute inset-0 z-50 flex flex-col pointer-events-none">
-      <div className="h-32 bg-white flex flex-col items-center justify-end pb-8 pointer-events-auto z-10">
-        <button 
-          onClick={onClose}
-          className="absolute top-6 right-6 p-2 bg-gray-50 rounded-full text-gray-400 active:scale-95 transition-all"
-        >
-          <X size={24} />
-        </button>
-        <span className={`font-bold text-lg tracking-wide transition-colors ${scanState === "duplicate" ? "text-amber-500" : "text-gray-900"}`}>
-          {getPromptMessage()}
-        </span>
-      </div>
+    <div className="absolute inset-0 pointer-events-none flex flex-col">
+       
+       {/* 頂部控制欄 */}
+       <div className="p-10 flex justify-between items-start pointer-events-auto">
+          <button 
+            onClick={onClose}
+            className="w-12 h-12 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl flex items-center justify-center text-white active:scale-90 transition-all"
+          >
+            <X size={24} />
+          </button>
 
-      <div className="flex-1 relative flex items-center justify-center">
-        <div className={`relative w-72 h-32 border-2 rounded-2xl overflow-hidden shadow-[0_0_0_9999px_rgba(255,255,255,0.95)] transition-all duration-300 ${
-           scanState === "success" ? "border-green-500 bg-green-500/10" : 
-           scanState === "duplicate" ? "border-amber-500 bg-amber-500/10" : 
-           "border-[#00F5FF] bg-black/5"
-        }`}>
+          <div className="flex flex-col items-end gap-1">
+             <div className="bg-black/40 backdrop-blur-xl border border-white/10 px-6 py-2 rounded-full flex items-center gap-3">
+                <div className="w-2 h-2 rounded-full bg-[#00F5FF] animate-pulse" />
+                <span className="text-white font-black text-xs tracking-widest uppercase">
+                  {scanState === "scanning-a" ? "Scanning Card No." : 
+                   scanState === "scanning-b" ? "Scanning Password" : 
+                   scanState === "success" ? "Success" : "Wait"}
+                </span>
+             </div>
+             {amount !== undefined && amount !== "" && (
+               <div className="text-[#00F5FF] font-black text-2xl tracking-tighter mt-2 bg-black/60 px-4 py-1 rounded-xl">
+                 ${amount}
+               </div>
+             )}
+          </div>
+       </div>
+
+       {/* 中央掃描框 */}
+       <div className="flex-1 flex items-center justify-center p-12">
+         <div className="relative w-full aspect-square max-w-[280px]">
+           {/* 四個角落的 L 形 */}
+           <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-[#00F5FF] rounded-tl-2xl shadow-[-5px_-5px_15px_rgba(0,245,255,0.2)]" />
+           <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-[#00F5FF] rounded-tr-2xl shadow-[5px_-5px_15px_rgba(0,245,255,0.2)]" />
+           <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-[#00F5FF] rounded-bl-2xl shadow-[-5px_5px_15px_rgba(0,245,255,0.2)]" />
+           <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-[#00F5FF] rounded-br-2xl shadow-[5px_5px_15px_rgba(0,245,255,0.2)]" />
+           
+           {/* 掃描雷射線 */}
            {(scanState === "scanning-a" || scanState === "scanning-b") && (
              <div className="absolute top-0 left-0 w-full h-1 bg-[#00F5FF] shadow-[0_0_15px_#00F5FF] animate-[scan_2.5s_ease-in-out_infinite]" />
            )}
            
            {scanState === "success" && (
-             <div className="absolute inset-0 bg-green-500/20 flex items-center justify-center backdrop-blur-sm animate-in fade-in duration-300">
+             <div className="absolute inset-0 bg-green-500/20 flex items-center justify-center backdrop-blur-sm animate-in fade-in duration-300 pointer-events-auto rounded-3xl">
                 <div className="bg-white rounded-full p-4 shadow-2xl animate-in zoom-in duration-500">
                    <CheckCircle2 size={64} className="text-green-500" />
                 </div>
@@ -58,36 +78,49 @@ export default function ScannerOverlay({ scanState, onClose, onSkipSecondary, is
                 <AlertTriangle size={64} className="text-amber-500 fill-white" />
              </div>
            )}
-        </div>
-      </div>
+         </div>
+       </div>
 
-      <div className="h-44 bg-white pointer-events-auto flex items-center justify-center z-10 px-8">
-        {scanState === "scanning-b" ? (
-          <button 
-            onClick={onSkipSecondary}
-            className="w-full flex items-center justify-center gap-2 py-4 bg-gray-900 text-white rounded-2xl font-bold active:scale-[0.98] transition-all shadow-xl shadow-gray-900/20"
-          >
-            本卡無密碼直接完成 <ChevronRight size={20} />
-          </button>
-        ) : (
-          <p className="text-gray-400 text-xs text-center leading-relaxed font-semibold">
-            {scanState === "duplicate" ? "請確保您掃描的是卡片上的另一組條碼" : "稍微傾斜卡片確保環境明亮，可避反光。"}
-          </p>
-        )}
-      </div>
+       {/* 底部控制介面 (成功後顯示) */}
+       <div className="p-10 pb-16 z-50 pointer-events-auto">
+          {scanState === "success" ? (
+             <div className="flex flex-col gap-4 animate-in slide-in-from-bottom duration-500">
+                <button 
+                  onClick={onNext}
+                  className="w-full bg-[#00F5FF] text-gray-900 font-black py-6 rounded-[2rem] text-xl shadow-2xl shadow-[#00F5FF]/30 active:scale-95 transition-all flex items-center justify-center gap-3"
+                >
+                  <Plus size={24} /> 掃描下一張
+                </button>
+                <button 
+                  onClick={onFinish}
+                  className="w-full bg-white/10 hover:bg-white/20 backdrop-blur-md text-white font-black py-4 rounded-[2rem] active:scale-95 transition-all"
+                >
+                  結束並返回
+                </button>
+             </div>
+          ) : (
+            scanState === "scanning-b" && (
+              <button 
+                onClick={onSkipSecondary}
+                className="w-full bg-white/10 backdrop-blur-md text-white font-black py-4 rounded-2xl active:scale-95 transition-all flex items-center justify-center gap-2"
+              >
+                只有一個條碼？直接完成
+              </button>
+            )
+          )}
+       </div>
 
-      <style>{`
-        @keyframes scan {
-          0% { transform: translateY(0); }
-          50% { transform: translateY(128px); }
-          100% { transform: translateY(0); }
-        }
-        @keyframes shake {
-          0%, 100% { transform: translateX(0); }
-          25% { transform: translateX(-8px); }
-          75% { transform: translateX(8px); }
-        }
-      `}</style>
+       <style jsx global>{`
+         @keyframes scan {
+           0%, 100% { top: 0%; opacity: 0.5; }
+           50% { top: 100%; opacity: 1; }
+         }
+         @keyframes shake {
+           0%, 100% { transform: translateX(0); }
+           25% { transform: translateX(-10px); }
+           75% { transform: translateX(10px); }
+         }
+       `}</style>
     </div>
   );
 }

@@ -84,8 +84,6 @@ export function useScanner(elementId: string) {
               Html5QrcodeSupportedFormats.ITF,
               Html5QrcodeSupportedFormats.UPC_A,
               Html5QrcodeSupportedFormats.UPC_E,
-              Html5QrcodeSupportedFormats.QR_CODE,
-              Html5QrcodeSupportedFormats.DATA_MATRIX,
             ]
           },
           (decodedText) => {
@@ -93,23 +91,26 @@ export function useScanner(elementId: string) {
 
             const currentData = dataRef.current;
             
+            // 處理第一段條碼 (卡號)
             if (!currentData.primary) {
-              triggerVibrate(60); 
-              currentData.primary = decodedText;
-              setData({ ...currentData });
+              // 7-11 預設規則：16 位
+              if (decodedText.length === 16 || !decodedText.match(/^\d+$/)) {
+                 triggerVibrate(60); 
+                 currentData.primary = decodedText;
+                 setData({ ...currentData });
 
-              if (!isDualMode) {
-                isProcessing.current = true; // 鎖定辨識
-                setScanState("success");
-              } else {
-                setScanState("scanning-b");
-                isProcessing.current = true;
-                // 模擬暫停：1.5秒內不准辨識下一組
-                setTimeout(() => {
-                   if (isMounted.current) isProcessing.current = false;
-                }, 1500);
+                 if (!isDualMode) {
+                   isProcessing.current = true;
+                   setScanState("success");
+                 } else {
+                   setScanState("scanning-b");
+                   isProcessing.current = true;
+                   setTimeout(() => { if (isMounted.current) isProcessing.current = false; }, 1200);
+                 }
               }
-            } else if (isDualMode && !currentData.secondary) {
+            } 
+            // 處理第二段條碼 (密碼/序號)
+            else if (isDualMode && !currentData.secondary) {
               if (decodedText === currentData.primary) {
                 isProcessing.current = true;
                 setScanState("duplicate");
@@ -122,10 +123,11 @@ export function useScanner(elementId: string) {
                   }
                 }, 1800);
               } else {
-                isProcessing.current = true;
+                // 7-11 密碼通常是 10 位，或者非卡號的另一條
                 triggerVibrate([100, 50, 100]);
                 currentData.secondary = decodedText;
                 setData({ ...currentData });
+                isProcessing.current = true;
                 setScanState("success");
               }
             }
@@ -135,7 +137,7 @@ export function useScanner(elementId: string) {
       } catch (err: any) {
         console.error("Camera startup failed:", err);
         if (isMounted.current) {
-          setErrorMsg("相機啟動失敗，請確認是否被其他 App 佔用或權限已關閉。");
+          setErrorMsg("相機啟動失敗");
           setScanState("error");
         }
       } finally {
@@ -143,6 +145,7 @@ export function useScanner(elementId: string) {
       }
     }, 400); 
   }, [elementId, stopScanning, isDualMode]);
+
 
   const skipSecondary = useCallback(() => {
     if (dataRef.current.primary) {

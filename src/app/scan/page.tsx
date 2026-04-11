@@ -124,12 +124,12 @@ export default function ScanPage() {
             
             <div className="text-left z-10">
               <h1 className="text-4xl font-black tracking-tight text-slate-900">批量掃描</h1>
-              <p className="text-sm text-slate-400 mt-2 font-bold uppercase tracking-widest">Setup your session</p>
+              <p className="text-sm text-[#10b981] mt-2 font-black uppercase tracking-[0.4em]">Setup Session</p>
             </div>
 
             <div className="space-y-6 z-10">
               <div className="flex flex-col gap-3">
-                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">Merchant</label>
+                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">選擇商家</label>
                 <div className="flex gap-2 overflow-x-auto pb-4 pt-1 scrollbar-hide snap-x">
                   {["7-11", ...customMerchants, "其它自訂"].map((m) => (
                     <button
@@ -141,7 +141,7 @@ export default function ScanPage() {
                           : "bg-white text-slate-400 border-slate-100 hover:bg-slate-50 shadow-sm"
                       }`}
                     >
-                      {m}
+                      {m === "7-11" ? "統一超商" : m}
                     </button>
                   ))}
                 </div>
@@ -149,7 +149,7 @@ export default function ScanPage() {
                 {isCustomMode && (
                    <input 
                      type="text" 
-                     placeholder="商家名稱..." 
+                     placeholder="請輸入商家名稱..." 
                      value={merchant}
                      onChange={(e) => setMerchant(e.target.value)}
                      className="w-full bg-white border-2 border-slate-100 rounded-[1.5rem] px-6 py-4 text-xl font-bold text-slate-900 outline-none focus:border-[#10b981] transition-all shadow-sm"
@@ -158,9 +158,9 @@ export default function ScanPage() {
               </div>
 
               <div className="flex flex-col gap-3">
-                 <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">Face Value (Amount)</label>
+                 <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">卡片面額 (金額)</label>
                  <div className="relative">
-                    <span className="absolute left-6 top-1/2 -translate-y-1/2 text-2xl font-black text-slate-300">$</span>
+                    <span className="absolute left-6 top-1/2 -translate-y-1/2 text-2xl font-black text-[#10b981]">$</span>
                     <input 
                       type="number" 
                       placeholder="500" 
@@ -174,8 +174,8 @@ export default function ScanPage() {
               <div className="bg-white p-6 rounded-[2rem] shadow-[0_10px_30px_-10px_rgba(0,0,0,0.05)] border border-slate-100">
                  <div className="flex items-center justify-between">
                     <div>
-                       <h3 className="font-black text-slate-800 text-sm">Smart Dual Scan</h3>
-                       <p className="text-[10px] text-slate-400 mt-1 font-bold">Auto-detect Card No. + Password</p>
+                       <h3 className="font-black text-slate-800 text-sm">智慧雙條碼模式</h3>
+                       <p className="text-[10px] text-slate-400 mt-1 font-bold italic">自動識別卡號與密碼</p>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
                       <input type="checkbox" checked={isDualMode} onChange={toggleDualMode} className="sr-only peer" />
@@ -189,7 +189,7 @@ export default function ScanPage() {
               onClick={handleStart}
               className="w-full mt-4 bg-slate-900 text-[#10b981] font-black rounded-[2.5rem] py-6 flex items-center justify-center gap-4 transition-all hover:bg-slate-800 active:scale-95 shadow-2xl shadow-slate-900/10 z-10 text-xl uppercase tracking-widest"
             >
-              <ScanLine size={32} /> Activate Camera
+              <ScanLine size={32} /> 啟動相機掃描
             </button>
 
          </div>
@@ -219,6 +219,7 @@ export default function ScanPage() {
               <ScanLine size={40} className="text-red-500" />
             </div>
             <h2 className="text-white text-2xl font-black mb-2">相機啟動失敗</h2>
+            <p className="text-slate-400 text-sm max-w-[240px]">請確認已授權相機權限並重新嘗試</p>
             <div className="flex flex-col w-full gap-4 mt-8 max-w-xs">
               <button 
                 onClick={() => startScanning()}

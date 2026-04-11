@@ -35,9 +35,9 @@ export default function ScannerOverlay({
              <div className="bg-slate-900/60 backdrop-blur-xl border border-white/10 px-6 py-3 rounded-full flex items-center gap-3">
                 <div className={`w-2.5 h-2.5 rounded-full ${scanState === "success" ? "bg-[#10b981]" : "bg-red-500 animate-pulse"}`} />
                 <span className="text-white font-black text-xs tracking-[0.2em] uppercase">
-                  {scanState === "scanning-a" ? "Primary Card" : 
-                   scanState === "scanning-b" ? "Card Secret" : 
-                   scanState === "success" ? "Verified" : "Syncing"}
+                  {scanState === "scanning-a" ? "正在掃描卡號" : 
+                   scanState === "scanning-b" ? "正在掃描密碼" : 
+                   scanState === "success" ? "辨識完成" : "等待中"}
                 </span>
              </div>
              {amount !== undefined && amount !== "" && (
@@ -52,10 +52,10 @@ export default function ScannerOverlay({
        <div className="flex-1 flex items-center justify-center p-12">
          <div className="relative w-full aspect-square max-w-[300px]">
            {/* 四個角落的 L 形 - 改用可靠綠 */}
-           <div className="absolute top-0 left-0 w-10 h-10 border-t-4 border-l-4 border-[#10b981] rounded-tl-3xl" />
-           <div className="absolute top-0 right-0 w-10 h-10 border-t-4 border-r-4 border-[#10b981] rounded-tr-3xl" />
-           <div className="absolute bottom-0 left-0 w-10 h-10 border-b-4 border-l-4 border-[#10b981] rounded-bl-3xl" />
-           <div className="absolute bottom-0 right-0 w-10 h-10 border-b-4 border-r-4 border-[#10b981] rounded-br-3xl" />
+           <div className="absolute top-0 left-0 w-10 h-10 border-t-4 border-l-4 border-[#10b981] rounded-tl-3xl opacity-50" />
+           <div className="absolute top-0 right-0 w-10 h-10 border-t-4 border-r-4 border-[#10b981] rounded-tr-3xl opacity-50" />
+           <div className="absolute bottom-0 left-0 w-10 h-10 border-b-4 border-l-4 border-[#10b981] rounded-bl-3xl opacity-50" />
+           <div className="absolute bottom-0 right-0 w-10 h-10 border-b-4 border-r-4 border-[#10b981] rounded-br-3xl opacity-50" />
            
            {/* 掃描雷射線 - 改用可靠綠 */}
            {(scanState === "scanning-a" || scanState === "scanning-b") && (
@@ -71,8 +71,10 @@ export default function ScannerOverlay({
            )}
 
            {scanState === "duplicate" && (
-             <div className="absolute inset-0 bg-amber-500/10 flex items-center justify-center animate-in shake duration-300">
-                <AlertTriangle size={72} className="text-amber-500 fill-white" />
+             <div className="absolute inset-0 bg-red-500/10 flex items-center justify-center animate-in shake duration-300 backdrop-blur-sm pointer-events-auto rounded-[3rem]">
+                <div className="bg-white rounded-full p-6 shadow-2xl animate-in bounce-in duration-700">
+                   <AlertTriangle size={72} className="text-red-500" />
+                </div>
              </div>
            )}
          </div>
@@ -86,13 +88,13 @@ export default function ScannerOverlay({
                   onClick={onNext}
                   className="w-full bg-[#10b981] text-white font-black py-6 rounded-[2.5rem] text-xl shadow-[0_20px_40px_rgba(16,185,129,0.25)] active:scale-95 transition-all flex items-center justify-center gap-4"
                 >
-                  <Plus size={28} /> Next Card
+                  <Plus size={28} /> 掃描下一張
                 </button>
                 <button 
                   onClick={onFinish}
                   className="w-full bg-slate-900 text-[#10b981] font-black py-4 rounded-[2rem] active:scale-95 transition-all flex items-center justify-center gap-2 uppercase tracking-widest text-xs"
                 >
-                  Save & Dashboard
+                  完成並返回
                 </button>
              </div>
           ) : (
@@ -101,7 +103,7 @@ export default function ScannerOverlay({
                 onClick={onSkipSecondary}
                 className="w-full bg-slate-900/60 backdrop-blur-md text-white font-black py-5 rounded-[1.5rem] active:scale-95 transition-all flex items-center justify-center gap-3 border border-white/5"
               >
-                No Password? Skip <Plus size={20} className="rotate-45" />
+                只有一個條碼？點此跳過 <Plus size={20} className="rotate-45 text-[#10b981]" />
               </button>
             )
           )}

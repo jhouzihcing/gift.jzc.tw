@@ -1,5 +1,0 @@
-{
-  "buildCommand": "cd \"gift card/sgcm-web\" && npm run build",
-  "installCommand": "cd \"gift card/sgcm-web\" && npm install --legacy-peer-deps",
-  "outputDirectory": "gift card/sgcm-web/.next"
-}

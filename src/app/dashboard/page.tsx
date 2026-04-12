@@ -54,7 +54,7 @@ export default function Dashboard() {
              />
           </div>
           <h1 className="text-xl font-black tracking-tight text-slate-900">
-            卡片管家 <span className="text-[10px] text-slate-300 ml-1 font-black align-top">v1.8.1</span>
+            卡片管家 <span className="text-[10px] text-slate-300 ml-1 font-black align-top">v1.10.0</span>
           </h1>
         </div>
         <div className="flex items-center gap-2 bg-white/50 backdrop-blur-md px-3 py-1.5 rounded-full border border-slate-100 shadow-sm">

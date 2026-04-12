@@ -51,14 +51,14 @@ export default function ScannerOverlay({
           </div>
        </div>
 
-       {/* 唯一對準框架 - v1.8.0 寬屏橫向模式 */}
+       {/* 唯一對準框架 - v1.10.0 雙路齊發模式 */}
        <div className="flex-1 flex items-center justify-center z-10 p-12">
-          <div className="relative w-[360px] h-[100px]">
+          <div className="relative w-[360px] h-[200px]">
             {/* 四個角落的標記 - 針對橫向長條進行極致對位 */}
-            <div className="absolute top-0 left-0 w-10 h-8 border-t-[4px] border-l-[4px] border-white rounded-tl-xl drop-shadow-md" />
-            <div className="absolute top-0 right-0 w-10 h-8 border-t-[4px] border-r-[4px] border-white rounded-tr-xl drop-shadow-md" />
-            <div className="absolute bottom-0 left-0 w-10 h-8 border-b-[4px] border-l-[4px] border-white rounded-bl-xl drop-shadow-md" />
-            <div className="absolute bottom-0 right-0 w-10 h-8 border-b-[4px] border-r-[4px] border-white rounded-br-xl drop-shadow-md" />
+            <div className="absolute top-0 left-0 w-12 h-10 border-t-[4px] border-l-[4px] border-white rounded-tl-2xl drop-shadow-md" />
+            <div className="absolute top-0 right-0 w-12 h-10 border-t-[4px] border-r-[4px] border-white rounded-tr-2xl drop-shadow-md" />
+            <div className="absolute bottom-0 left-0 w-12 h-10 border-b-[4px] border-l-[4px] border-white rounded-bl-2xl drop-shadow-md" />
+            <div className="absolute bottom-0 right-0 w-12 h-10 border-b-[4px] border-r-[4px] border-white rounded-br-2xl drop-shadow-md" />
             
             {scanState === "success" && (
               <div className="absolute inset-0 bg-[#34DA4F]/10 flex items-center justify-center backdrop-blur-sm animate-in fade-in zoom-in duration-500 pointer-events-auto rounded-[2rem]">

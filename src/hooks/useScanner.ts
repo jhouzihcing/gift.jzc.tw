@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 
-export type ScanState = "idle" | "scanning-a" | "scanning-b" | "success" | "error" | "duplicate";
+export type ScanState = "idle" | "scanning-a" | "scanning-b" | "success" | "error" | "duplicate" | "loading";
 
 interface BarcodeData {
   primary: string | null;
@@ -19,6 +19,7 @@ export function useScanner(elementId: string) {
   const isInitializing = useRef(false);
   const isMounted = useRef(true);
   const isProcessing = useRef(false);
+  const quaggaLibRef = useRef<any>(null);
 
   const triggerVibrate = (pattern: number | number[]) => {
     if (typeof window !== "undefined" && "vibrate" in navigator) {
@@ -26,19 +27,30 @@ export function useScanner(elementId: string) {
     }
   };
 
+  const getQuagga = useCallback(async () => {
+    if (quaggaLibRef.current) return quaggaLibRef.current;
+    if (typeof window === "undefined") return null;
+    try {
+      const M = await import("@ericblade/quagga2");
+      quaggaLibRef.current = M.default;
+      return M.default;
+    } catch (e) {
+      return null;
+    }
+  }, []);
+
   const stopScanning = useCallback(async () => {
     isProcessing.current = false;
+    const Quagga = await getQuagga();
+    if (!Quagga) return;
     try {
-      const Quagga = (await import("@ericblade/quagga2")).default;
       await Quagga.stop();
       Quagga.offDetected();
       const container = document.getElementById(elementId);
       if (container) container.innerHTML = ""; 
-    } catch (err) {
-      // Ignore
-    }
+    } catch (err) {}
     if (isMounted.current) setScanState("idle");
-  }, [elementId]);
+  }, [elementId, getQuagga]);
 
   const resetData = useCallback(() => {
     dataRef.current = { primary: null, secondary: null };
@@ -50,50 +62,63 @@ export function useScanner(elementId: string) {
   const handleDetected = useCallback((result: any) => {
     if (isProcessing.current || !isMounted.current) return;
     
-    // Quagga 回報成功率權重 (過濾低信心度的掃描，避免誤讀)
-    if (result.codeResult.confidence < 0.6) return;
+    // 支援單一或多重結果
+    const results = Array.isArray(result) ? result : [result];
+    if (results.length === 0) return;
 
-    const decodedText = result.codeResult.code;
     const currentData = dataRef.current;
-    
-    // 處理第一段條碼 (卡號)
-    if (!currentData.primary) {
-      // 邏輯保持一致：如果是 16 位或非純數字，視為卡號
-      if (decodedText.length === 16 || !decodedText.match(/^\d+$/)) {
-         triggerVibrate(60); 
-         currentData.primary = decodedText;
-         setData({ ...currentData });
+    let foundPrimary: string | null = null;
+    let foundSecondary: string | null = null;
 
-         if (!isDualMode) {
-           isProcessing.current = true;
-           setScanState("success");
-         } else {
-           setScanState("scanning-b");
-           isProcessing.current = true;
-           setTimeout(() => { if (isMounted.current) isProcessing.current = false; }, 1500);
-         }
-      }
-    } 
-    // 處理第二段條碼 (密碼/序號)
-    else if (isDualMode && !currentData.secondary) {
-      if (decodedText === currentData.primary) {
-        isProcessing.current = true;
-        setScanState("duplicate");
-        triggerVibrate([50, 50, 50]);
-        setTimeout(() => {
-          if (dataRef.current.secondary) return;
-          if (isMounted.current) {
-            setScanState("scanning-b");
-            isProcessing.current = false;
-          }
-        }, 1800);
+    // 遍歷當前影框中的所有條碼
+    for (const r of results) {
+      if (r.codeResult.confidence < 0.6) continue;
+      const text = r.codeResult.code;
+
+      // 16 碼純數字視為卡號
+      if (text.length === 16 && /^\d+$/.test(text)) {
+        foundPrimary = text;
       } else {
-        triggerVibrate([100, 50, 100]);
-        currentData.secondary = decodedText;
-        setData({ ...currentData });
-        isProcessing.current = true;
-        setScanState("success");
+        foundSecondary = text;
       }
+    }
+
+    // [v1.10.0 核心邏輯]：瞬發雙掃描
+    if (isDualMode && foundPrimary && foundSecondary && foundPrimary !== foundSecondary) {
+      isProcessing.current = true;
+      triggerVibrate([60, 100, 60]); // 雙重碎震代表一次到位
+      dataRef.current = { primary: foundPrimary, secondary: foundSecondary };
+      setData({ primary: foundPrimary, secondary: foundSecondary });
+      setScanState("success");
+      return;
+    }
+
+    // 否則，走標準流程
+    const firstMatch = results.find(r => r.codeResult.confidence >= 0.7);
+    if (!firstMatch) return;
+    const text = firstMatch.codeResult.code;
+
+    if (!currentData.primary) {
+      // 只有在是 16 碼數字或者是卡號格式時才接受為 Primary
+      if (text.length === 16 && /^\d+$/.test(text)) {
+        isProcessing.current = true;
+        triggerVibrate(60); 
+        currentData.primary = text;
+        setData({ ...currentData });
+
+        if (!isDualMode) {
+          setScanState("success");
+        } else {
+          setScanState("scanning-b");
+          setTimeout(() => { if (isMounted.current) isProcessing.current = false; }, 1500);
+        }
+      }
+    } else if (isDualMode && !currentData.secondary && text !== currentData.primary) {
+       isProcessing.current = true;
+       triggerVibrate([100, 50, 100]);
+       currentData.secondary = text;
+       setData({ ...currentData });
+       setScanState("success");
     }
   }, [isDualMode]);
 
@@ -101,22 +126,21 @@ export function useScanner(elementId: string) {
     if (isInitializing.current) return;
     isInitializing.current = true;
     
-    // 給予 DOM 一點緩衝時間
     setTimeout(async () => {
       try {
         if (!isMounted.current) return;
         await stopScanning();
+        const Quagga = await getQuagga();
+        if (!Quagga) return;
 
         setErrorMsg(null);
-        setScanState("scanning-a");
+        setScanState("loading");
         isProcessing.current = false;
         dataRef.current = { primary: null, secondary: null };
         setData({ primary: null, secondary: null });
 
-        // v1.9.0 導入 Quagga2 技術：橫向極速解碼
-        const Quagga = (await import("@ericblade/quagga2")).default;
-        
-        Quagga.init({
+        // v1.10.0: 開啟 Multiple 模式與 360x200 寬視野
+        await Quagga.init({
           inputStream: {
             name: "LiveStream",
             type: "LiveStream",
@@ -124,51 +148,38 @@ export function useScanner(elementId: string) {
             constraints: {
               width: { ideal: 1280 },
               height: { ideal: 720 },
-              facingMode: "environment",
-              aspectRatio: { min: 1, max: 2 },
-            },
-            singleChannel: false // 針對彩色影像優化
+              facingMode: "environment"
+            }
           },
           locator: {
-             patchSize: "large", // v1.9.0 核心：大補丁定位，提高 Code 128 首發命中率
-             halfSample: true, // 降低處理負擔，提升幀率
+             patchSize: "large",
+             halfSample: true,
           },
-          numOfWorkers: 4, // 移動端多核心加速
+          numOfWorkers: 2, 
           decoder: {
-            readers: ["code_128_reader"], // 只保留對 Code 128 的支援，排除干擾
-            multiple: false
+            readers: ["code_128_reader"],
+            multiple: true // <--- 重要：開啟多重辨識
           },
-          locate: true // 開啟條碼定位機制，增加精準度
-        }, (err) => {
-          if (err) {
-            console.error("Quagga2 Init Error:", err);
-            if (isMounted.current) {
-              setErrorMsg("相機啟動失敗");
-              setScanState("error");
-            }
-            return;
-          }
-          if (isMounted.current) {
-            import("@ericblade/quagga2").then((M) => {
-              const Q = M.default;
-              Q.start();
-              Q.onDetected(handleDetected);
-            });
-          }
+          locate: true 
         });
 
-      } catch (err: any) {
-        console.error("Quagga2 startup failed:", err);
         if (isMounted.current) {
-          setErrorMsg("相機連結失敗");
+          Quagga.start();
+          Quagga.onDetected(handleDetected);
+          setScanState("scanning-a");
+        }
+      } catch (err: any) {
+        if (isMounted.current) {
+          setErrorMsg("相機啟動異常");
           setScanState("error");
         }
       } finally {
         isInitializing.current = false;
       }
-    }, 500); 
-  }, [elementId, stopScanning, handleDetected]);
+    }, 400); 
+  }, [elementId, stopScanning, handleDetected, getQuagga]);
 
+  // 跳過第二段卡號
   const skipSecondary = useCallback(() => {
     if (dataRef.current.primary) {
       isProcessing.current = true;

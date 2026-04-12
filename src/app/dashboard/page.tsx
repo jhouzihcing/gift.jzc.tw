@@ -45,12 +45,12 @@ export default function Dashboard() {
       {/* 頂部標題 - 縮小版且固定高度 */}
       <header className="px-6 pt-6 pb-2 grow-0 flex justify-between items-center z-20 shrink-0">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg overflow-hidden shadow-lg border border-slate-100 bg-white">
+          <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center">
              {/* eslint-disable-next-line @next/next/no-img-element */}
              <img 
                src="/logo.png" 
                alt="Logo" 
-               className="w-full h-full object-cover"
+               className="w-full h-full object-contain"
              />
           </div>
           <h1 className="text-xl font-black tracking-tight text-slate-900">

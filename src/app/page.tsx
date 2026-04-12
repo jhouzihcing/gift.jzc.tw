@@ -62,7 +62,7 @@ export default function Home() {
           <button 
             onClick={handleGoogleLogin}
             disabled={isLoggingIn}
-            className="w-full bg-slate-900 text-white font-black rounded-3xl py-5 flex items-center justify-center gap-4 transition-all hover:bg-slate-800 active:scale-95 shadow-xl shadow-slate-900/20 disabled:opacity-50 group"
+            className="w-full bg-white text-slate-900 font-black rounded-3xl py-5 flex items-center justify-center gap-4 transition-all hover:bg-slate-50 active:scale-95 shadow-xl shadow-slate-900/10 disabled:opacity-50 group border border-slate-100"
           >
             {isLoggingIn ? (
               "身分驗證中..."

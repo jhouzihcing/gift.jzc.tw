@@ -39,7 +39,7 @@ export default function Home() {
       <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-[#34DA4F]/10 rounded-full blur-[100px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[40vw] h-[40vw] bg-[#5CF777]/5 rounded-full blur-[80px] pointer-events-none" />
 
-      <div className="z-10 flex flex-col items-center w-full max-w-sm gap-12 text-center bg-white/70 p-10 rounded-[2.5rem] border border-white shadow-2xl backdrop-blur-2xl">
+      <div className="z-10 flex flex-col items-center w-full max-w-sm gap-12 text-center">
         
         <div className="flex flex-col items-center">
           <div className="w-20 h-20 rounded-[1.5rem] flex items-center justify-center mb-8 shadow-2xl relative overflow-hidden bg-white border border-slate-100 p-2">

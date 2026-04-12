@@ -1,6 +1,4 @@
-"use client";
-
-import { useState } from "react";
+import { useState, memo } from "react";
 import Barcode from "react-barcode";
 import { Maximize2, X } from "lucide-react";
 
@@ -15,11 +13,12 @@ interface GiftCardProps {
   onDelete: (id: string) => void;
 }
 
-export default function GiftCard({ card, onDelete }: GiftCardProps) {
+const GiftCard = memo(({ card, onDelete }: GiftCardProps) => {
   const [isFull, setIsFull] = useState(false);
 
   return (
     <>
+      {/* ... previous content preserved ... */}
       <div className="relative shrink-0 w-[82vw] max-w-[320px] bg-white rounded-[2.5rem] shadow-[var(--card-shadow)] overflow-hidden flex flex-col items-center p-7 border border-slate-100 snap-center transition-all">
         
         {/* 科技背景紋理 - FaceTime Green 版 */}
@@ -125,4 +124,6 @@ export default function GiftCard({ card, onDelete }: GiftCardProps) {
       )}
     </>
   );
-}
+});
+
+export default GiftCard;

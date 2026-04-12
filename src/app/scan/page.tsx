@@ -78,14 +78,26 @@ export default function ScanPage() {
     return () => { stopScanning(); };
   }, [isReadyToScan, startScanning, stopScanning]);
 
-  // v1.1.7 自動存檔邏輯
+  // v1.1.7 自動存檔邏輯 (v1.2.3 安全化與相容化)
   useEffect(() => {
     if (scanState === "success") {
-      const finalMerchant = isCustomMode && !merchant.trim() ? "未命名商家" : merchant;
+      // 1. 輸入清理與安全化 (Sanitization)
+      const rawMerchant = isCustomMode && !merchant.trim() ? "未命名商家" : merchant;
+      const cleanMerchant = rawMerchant
+        .trim()
+        .replace(/[<>]/g, "") // 阻斷基礎 XSS
+        .substring(0, 20); // 限制長度
+
+      // 2. UUID 相容性處理 (Polyfill)
+      const generateId = () => {
+        if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+        return Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+      };
+
       addCard({
-        id: crypto.randomUUID(),
-        merchant: finalMerchant,
-        name: finalMerchant === "7-11" ? "7-11 商品卡" : `${finalMerchant} 禮物卡`,
+        id: generateId(),
+        merchant: cleanMerchant,
+        name: cleanMerchant === "7-11" ? "7-11 商品卡" : `${cleanMerchant} 禮物卡`,
         barcode: data.primary || "",
         secondaryBarcode: data.secondary || null,
         amount: Number(amount),

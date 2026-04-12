@@ -39,7 +39,7 @@ export default function Dashboard() {
   if (loading || !user) return <div className="h-[100dvh] bg-slate-50 flex flex-col items-center justify-center font-black tracking-widest text-slate-300 animate-pulse">系統加載中...</div>;
 
   return (
-    <div className="h-[100dvh] bg-slate-50 flex flex-col overflow-hidden text-slate-900 font-sans relative">
+    <div className="h-screen h-[100dvh] bg-slate-50 flex flex-col overflow-hidden text-slate-900 font-sans relative">
       <div className="absolute top-0 left-0 w-full h-[60vh] bg-gradient-to-b from-[#34c759]/5 to-transparent pointer-events-none" />
 
       {/* 頂部標題 - 縮小版且固定高度 */}
@@ -48,13 +48,13 @@ export default function Dashboard() {
           <div className="w-8 h-8 rounded-lg overflow-hidden shadow-lg border border-slate-100 bg-white">
              {/* eslint-disable-next-line @next/next/no-img-element */}
              <img 
-               src="/Users/jzc/.gemini/antigravity/brain/b0535309-6f2e-417d-8b38-9ea5d992d19c/sgcm_logo_v116_1775877006501_1775925585422.png" 
+               src="/logo.png" 
                alt="Logo" 
                className="w-full h-full object-cover"
              />
           </div>
           <h1 className="text-xl font-black tracking-tight text-slate-900">
-            卡片管家 <span className="text-[10px] text-[#34c759] ml-1 font-black align-top">v1.2.2</span>
+            卡片管家 <span className="text-[10px] text-[#34c759] ml-1 font-black align-top">v1.2.3</span>
           </h1>
         </div>
         <div className="flex items-center gap-2 bg-white/50 backdrop-blur-md px-3 py-1.5 rounded-full border border-slate-100 shadow-sm">

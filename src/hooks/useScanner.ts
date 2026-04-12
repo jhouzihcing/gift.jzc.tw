@@ -22,7 +22,7 @@ export function useScanner(elementId: string) {
   const quaggaLibRef = useRef<any>(null);
 
   const triggerVibrate = (pattern: number | number[]) => {
-    if (typeof window !== "undefined" && "vibrate" in navigator) {
+    if (typeof window !== "undefined" && typeof navigator !== "undefined" && navigator.vibrate) {
       navigator.vibrate(pattern);
     }
   };

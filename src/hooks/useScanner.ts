@@ -1,6 +1,6 @@
 "use client";
 
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
+import Quagga from "@ericblade/quagga2";
 import { useState, useCallback, useRef, useEffect } from "react";
 
 export type ScanState = "idle" | "scanning-a" | "scanning-b" | "success" | "error" | "duplicate";
@@ -16,7 +16,6 @@ export function useScanner(elementId: string) {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isDualMode, setIsDualMode] = useState(false);
   
-  const scannerRef = useRef<Html5Qrcode | null>(null);
   const dataRef = useRef<BarcodeData>({ primary: null, secondary: null });
   const isInitializing = useRef(false);
   const isMounted = useRef(true);
@@ -30,17 +29,13 @@ export function useScanner(elementId: string) {
 
   const stopScanning = useCallback(async () => {
     isProcessing.current = false;
-    if (scannerRef.current) {
-      try {
-        if (scannerRef.current.isScanning) {
-          await scannerRef.current.stop();
-        }
-        const container = document.getElementById(elementId);
-        if (container) container.innerHTML = ""; 
-      } catch (err) {
-        // Quiet fail
-      }
-      scannerRef.current = null;
+    try {
+      await Quagga.stop();
+      Quagga.offDetected();
+      const container = document.getElementById(elementId);
+      if (container) container.innerHTML = ""; 
+    } catch (err) {
+      // Ignore
     }
     if (isMounted.current) setScanState("idle");
   }, [elementId]);
@@ -52,15 +47,65 @@ export function useScanner(elementId: string) {
     isProcessing.current = false;
   }, []);
 
+  const handleDetected = useCallback((result: any) => {
+    if (isProcessing.current || !isMounted.current) return;
+    
+    // Quagga 回報成功率權重 (過濾低信心度的掃描，避免誤讀)
+    if (result.codeResult.confidence < 0.6) return;
+
+    const decodedText = result.codeResult.code;
+    const currentData = dataRef.current;
+    
+    // 處理第一段條碼 (卡號)
+    if (!currentData.primary) {
+      // 邏輯保持一致：如果是 16 位或非純數字，視為卡號
+      if (decodedText.length === 16 || !decodedText.match(/^\d+$/)) {
+         triggerVibrate(60); 
+         currentData.primary = decodedText;
+         setData({ ...currentData });
+
+         if (!isDualMode) {
+           isProcessing.current = true;
+           setScanState("success");
+         } else {
+           setScanState("scanning-b");
+           isProcessing.current = true;
+           setTimeout(() => { if (isMounted.current) isProcessing.current = false; }, 1500);
+         }
+      }
+    } 
+    // 處理第二段條碼 (密碼/序號)
+    else if (isDualMode && !currentData.secondary) {
+      if (decodedText === currentData.primary) {
+        isProcessing.current = true;
+        setScanState("duplicate");
+        triggerVibrate([50, 50, 50]);
+        setTimeout(() => {
+          if (dataRef.current.secondary) return;
+          if (isMounted.current) {
+            setScanState("scanning-b");
+            isProcessing.current = false;
+          }
+        }, 1800);
+      } else {
+        triggerVibrate([100, 50, 100]);
+        currentData.secondary = decodedText;
+        setData({ ...currentData });
+        isProcessing.current = true;
+        setScanState("success");
+      }
+    }
+  }, [isDualMode]);
+
   const startScanning = useCallback(async () => {
     if (isInitializing.current) return;
     isInitializing.current = true;
     
-    // 短暫延遲確保 DOM 渲染與前次清理完成
+    // 給予 DOM 一點緩衝時間
     setTimeout(async () => {
       try {
         if (!isMounted.current) return;
-        if (scannerRef.current) await stopScanning();
+        await stopScanning();
 
         setErrorMsg(null);
         setScanState("scanning-a");
@@ -68,80 +113,56 @@ export function useScanner(elementId: string) {
         dataRef.current = { primary: null, secondary: null };
         setData({ primary: null, secondary: null });
 
-        // v1.7.2 回歸高度穩定的 html5-qrcode 模式
-        const html5Qrcode = new Html5Qrcode(elementId, {
-          formatsToSupport: [ Html5QrcodeSupportedFormats.CODE_128 ],
-          verbose: false
-        });
-        scannerRef.current = html5Qrcode;
-
-        await html5Qrcode.start(
-          { facingMode: "environment" }, 
-          {
-            fps: 40,
-            qrbox: { width: 360, height: 100 },
-            aspectRatio: 1.77777778,
-            disableFlip: true,
-            rememberLastUsedCamera: true,
+        // v1.9.0 導入 Quagga2 技術：橫向極速解碼
+        Quagga.init({
+          inputStream: {
+            name: "LiveStream",
+            type: "LiveStream",
+            target: `#${elementId}`,
+            constraints: {
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+              facingMode: "environment",
+              aspectRatio: { min: 1, max: 2 },
+            },
+            singleChannel: false // 針對彩色影像優化
           },
-          (decodedText) => {
-            if (isProcessing.current || !isMounted.current) return;
-
-            const currentData = dataRef.current;
-            
-            // 處理第一段條碼 (卡號)
-            if (!currentData.primary) {
-              if (decodedText.length === 16 || !decodedText.match(/^\d+$/)) {
-                 triggerVibrate(60); 
-                 currentData.primary = decodedText;
-                 setData({ ...currentData });
-
-                 if (!isDualMode) {
-                   isProcessing.current = true;
-                   setScanState("success");
-                 } else {
-                   setScanState("scanning-b");
-                   isProcessing.current = true;
-                   // 給予一段緩衝時間避免立即重複偵測同一個條碼
-                   setTimeout(() => { if (isMounted.current) isProcessing.current = false; }, 1200);
-                 }
-              }
-            } 
-            // 處理第二段條碼 (密碼/序號)
-            else if (isDualMode && !currentData.secondary) {
-              if (decodedText === currentData.primary) {
-                isProcessing.current = true;
-                setScanState("duplicate");
-                triggerVibrate([50, 50, 50]);
-                setTimeout(() => {
-                  if (dataRef.current.secondary) return;
-                  if (isMounted.current) {
-                    setScanState("scanning-b");
-                    isProcessing.current = false;
-                  }
-                }, 1800);
-              } else {
-                triggerVibrate([100, 50, 100]);
-                currentData.secondary = decodedText;
-                setData({ ...currentData });
-                isProcessing.current = true;
-                setScanState("success");
-              }
+          locator: {
+             patchSize: "large", // v1.9.0 核心：大補丁定位，提高 Code 128 首發命中率
+             halfSample: true, // 降低處理負擔，提升幀率
+          },
+          numOfWorkers: 4, // 移動端多核心加速
+          decoder: {
+            readers: ["code_128_reader"], // 只保留對 Code 128 的支援，排除干擾
+            multiple: false
+          },
+          locate: true // 開啟條碼定位機制，增加精準度
+        }, (err) => {
+          if (err) {
+            console.error("Quagga2 Init Error:", err);
+            if (isMounted.current) {
+              setErrorMsg("相機啟動失敗");
+              setScanState("error");
             }
-          },
-          () => {} 
-        );
+            return;
+          }
+          if (isMounted.current) {
+            Quagga.start();
+            Quagga.onDetected(handleDetected);
+          }
+        });
+
       } catch (err: any) {
-        console.error("Stable Scanner startup failed:", err);
+        console.error("Quagga2 startup failed:", err);
         if (isMounted.current) {
-          setErrorMsg("無法連結相機");
+          setErrorMsg("相機連結失敗");
           setScanState("error");
         }
       } finally {
         isInitializing.current = false;
       }
-    }, 400); 
-  }, [elementId, stopScanning, isDualMode]);
+    }, 500); 
+  }, [elementId, stopScanning, handleDetected]);
 
   const skipSecondary = useCallback(() => {
     if (dataRef.current.primary) {

@@ -69,12 +69,19 @@ export function useScanner(elementId: string) {
 
         const html5Qrcode = new Html5Qrcode(elementId, {
           formatsToSupport: [ Html5QrcodeSupportedFormats.CODE_128 ],
-          verbose: false
+          verbose: false,
+          experimentalFeatures: {
+            useBarCodeDetectorIfSupported: true
+          }
         });
         scannerRef.current = html5Qrcode;
 
         await html5Qrcode.start(
-          { facingMode: "environment" }, 
+          { 
+            facingMode: "environment",
+            // @ts-ignore - Some browsers support advanced constraints
+            focusMode: "continuous"
+          }, 
           {
             fps: 40,
             qrbox: { width: 320, height: 160 },

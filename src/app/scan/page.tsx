@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useScanner } from "@/hooks/useScanner";
 import ScannerOverlay from "@/components/ScannerOverlay";

@@ -30,15 +30,17 @@ body {
   min-height: 100dvh;
 }
 
-/* 掃描器性能優化與介面淨化 (v1.7.2 穩定模式) */
+/* 掃描器性能優化與介面淨化 (v1.9.0 Quagga2 極速模式) */
 #reader-video {
   border: none !important;
+  background: black;
 }
 
 #reader-video video {
+  width: 100% !important;
+  height: 100% !important;
   object-fit: cover !important;
   border: none !important;
-  box-shadow: none !important;
 }
 
 /* 強力隱藏庫內建的所有標記框、掃描線、遮罩、提示字與區域 */

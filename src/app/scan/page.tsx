@@ -77,7 +77,8 @@ export default function ScanPage() {
       stopScanning();
     }
     return () => { stopScanning(); };
-  }, [isReadyToScan, startScanning, stopScanning]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isReadyToScan]);
 
   const { syncImmediately } = useDriveSync();
   const [sessionCards, setSessionCards] = useState<any[]>([]);

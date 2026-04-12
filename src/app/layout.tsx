@@ -18,7 +18,9 @@ export const metadata: Metadata = {
     title: "智慧管家",
   },
   icons: {
-    apple: "/icons/icon-192x192.png",
+    icon: "/icons/icon-192x192.png",
+    apple: "/icons/apple-touch-icon.png",
+    shortcut: "/icons/icon-192x192.png",
   },
   manifest: "/manifest.json",
   verification: {

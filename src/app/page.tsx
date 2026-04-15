@@ -86,7 +86,7 @@ export default function Home() {
       {/* 底部隱私條款提示 - 改為標準 Link 以利 Google 爬蟲掃描 */}
       <div className="absolute bottom-10 left-0 w-full text-center px-6">
          <div className="flex flex-col items-center gap-2">
-            ZJ Card • 奇蹟卡 <span className="text-[10px] text-slate-300 ml-1 font-black align-top">v2.1.0</span>
+            ZJ Card • 奇蹟卡 <span className="text-[10px] text-slate-300 ml-1 font-black align-top">v2.2.0</span>
            <p className="text-[10px] text-slate-300 font-bold leading-relaxed max-w-xs mx-auto">
              登入即代表您同意本程式之 
              <Link href="/settings/privacy" className="text-slate-400 underline underline-offset-4 ml-1 hover:text-[#34DA4F] transition-colors">

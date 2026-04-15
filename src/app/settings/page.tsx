@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { signOut } from "next-auth/react";
 import { ChevronLeft, LogOut, Trash2, Plus, Store, RotateCcw, RefreshCw, ShieldCheck, ChevronRight, Code } from "lucide-react";
+import { VERSION } from "@/constants/version";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -192,7 +193,7 @@ export default function SettingsPage() {
                      </div>
                   </div>
                   <div className="flex items-center gap-1">
-                     <span className="text-[9px] bg-[#34DA4F]/10 text-[#34DA4F] px-2 py-0.5 rounded-full font-black uppercase">v2.1.0</span>
+                     <span className="text-[9px] bg-[#34DA4F]/10 text-[#34DA4F] px-2 py-0.5 rounded-full font-black uppercase">{VERSION}</span>
                      <ChevronRight size={20} className="text-slate-300" />
                   </div>
                 </a>

@@ -84,7 +84,7 @@ export default function Home() {
       </div>
 
       {/* 底部隱私條款提示 - 改為標準 Link 以利 Google 爬蟲掃描 */}
-      <div className="absolute bottom-10 left-0 w-full text-center px-6">
+      <div className="absolute bottom-10 left-0 w-full text-center px-6 z-20">
          <div className="flex flex-col items-center gap-2">
             ZJ Card • 奇蹟卡 <span className="text-[10px] text-slate-300 ml-1 font-black align-top">{VERSION}</span>
            <p className="text-[10px] text-slate-300 font-bold leading-relaxed max-w-xs mx-auto">

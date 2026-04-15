@@ -12,7 +12,7 @@ import {
 } from "@/lib/driveFile";
 
 export function useDriveSync() {
-  const { user, setSyncStatus, setSyncError } = useAuthStore();
+  const { user, setSyncStatus, setSyncError, setSyncCard } = useAuthStore();
   const { setCards, markCardSynced, isInitialized, finishInitialization, addCustomMerchant } = useCardStore();
   
   const fileIdRef = useRef<string | null>(null);
@@ -88,6 +88,8 @@ export function useDriveSync() {
     } catch (e: any) {
       console.error("[Drive Sync] Flash Sync failed:", e);
       pendingCards.current = [...cardsToSync, ...pendingCards.current];
+      // 重置 isSyncing，否則 UI 會永遠卡在「同步中」
+      setSyncStatus(false, useAuthStore.getState().lastSync);
       if (e.message !== "SYNC_CONFLICT") setSyncError(true);
     } finally {
       writeInProgress.current = false;
@@ -165,6 +167,12 @@ export function useDriveSync() {
     pendingCards.current.push(card);
     flushPending();
   }, [user?.driveToken, flushPending]);
+
+  // 將 syncImmediately 注冊到全域 store，讓其他元件無需建立第二個 hook 實例
+  useEffect(() => {
+    setSyncCard(syncImmediately);
+    return () => setSyncCard(null);
+  }, [syncImmediately, setSyncCard]);
 
   return { syncImmediately };
 }

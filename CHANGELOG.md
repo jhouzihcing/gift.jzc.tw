@@ -1,5 +1,12 @@
 # 更新日誌 (Changelog)
 
+## [2.10.0] - 2026-04-16
+### 🐛 同步卡死修復 (Sync Deadlock Fix)
+- **修復掃描後無法立即同步**：`scan/page.tsx` 原本自行呼叫 `useDriveSync()` 建立第二個 hook 實例，導致其 `fileIdRef` 永遠為 null，`syncImmediately` 直接 return 而不進行任何同步。現改為從 Zustand 全域 store 取得 `syncCard`，由 `AuthProvider` 的唯一 hook 實例處理所有同步。
+- **修復「永久同步中」**：`flushPending()` 的 `catch` 區塊在同步失敗時從未呼叫 `setSyncStatus(false, ...)`，導致 `isSyncing` 永遠停在 `true`，UI 一直顯示「同步中」。現在錯誤發生時會正確重置狀態，再由重試機制在下次嘗試時重新設為 `true`。
+
+---
+
 ## [2.9.0] - 2026-04-15
 ### ⚡ 閃電同步計畫 (Flash Sync)
 - **樂觀寫入策略 (Optimistic Writing)**：重構同步引擎，跳過每次寫入前的重複讀取。通訊次數從 2 趟減為 1 趟，同步速度提升 100%。

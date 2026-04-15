@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { useScanner } from "@/hooks/useScanner";
 import ScannerOverlay from "@/components/ScannerOverlay";
 import { useCardStore } from "@/store/useCardStore";
+import { useAuthStore } from "@/store/useAuthStore";
 import { ScanLine, ChevronLeft, Layers, Minus } from "lucide-react";
-import { useDriveSync } from "@/hooks/useDriveSync";
 
 export default function ScanPage() {
   const router = useRouter();
@@ -22,6 +22,7 @@ export default function ScanPage() {
   } = useScanner("reader-video");
   
   const { addCard, customMerchants, cards } = useCardStore();
+  const syncCard = useAuthStore((s) => s.syncCard);
 
   const [isReadyToScan, setIsReadyToScan] = useState(false);
   const [merchant, setMerchant] = useState("7-11");
@@ -79,7 +80,6 @@ export default function ScanPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isReadyToScan]);
 
-  const { syncImmediately } = useDriveSync();
   const [sessionStartTime] = useState(Date.now());
   const lastScannedId = useRef<string | null>(null);
 
@@ -125,12 +125,12 @@ export default function ScanPage() {
 
       const added = addCard(newCard);
       if (added) {
-        if (syncImmediately) syncImmediately(newCard);
+        if (syncCard) syncCard(newCard);
       }
     } else if (scanState === "scanning-a" || scanState === "idle") {
       lastScannedId.current = null; // 重設追蹤
     }
-  }, [scanState, addCard, data, merchant, isCustomMode, amount, syncImmediately]);
+  }, [scanState, addCard, data, merchant, isCustomMode, amount, syncCard]);
 
   const handleFinish = () => {
     stopScanning();

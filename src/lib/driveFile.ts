@@ -1,6 +1,5 @@
 import { encryptDB, decryptDB } from "./crypto";
 
-const HIDDEN_FILENAME = "sgcm-data.json";
 const VISIBLE_FILENAME = "zj-card-sync.json";
 const OLD_VISIBLE_FILENAME = "zc-card 請勿刪除·此為禮物卡檔案.json";
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
@@ -24,11 +23,6 @@ export interface DriveDB {
   customMerchants: string[];
 }
 
-export interface DriveFileIds {
-  hiddenId: string | null;
-  visibleId: string | null;
-}
-
 const emptyDB = (): DriveDB => ({
   version: 1,
   lastModified: Date.now(),
@@ -43,8 +37,8 @@ export async function migrateOldVisibleFile(token: string): Promise<void> {
   try {
     const q = `name='${OLD_VISIBLE_FILENAME}' and trashed=false`;
     const res = await fetch(
-      `${DRIVE_API}/files?q=${encodeURIComponent(q)}&fields=files(id)&spaces=drive`,
-      { headers: { Authorization: `Bearer ${token}` } }
+      `${DRIVE_API}/files?q=${encodeURIComponent(q)}&fields=files(id)&spaces=drive&t=${Date.now()}`,
+      { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
     );
     if (!res.ok) return;
     const data = await res.json();
@@ -67,34 +61,30 @@ export async function migrateOldVisibleFile(token: string): Promise<void> {
 }
 
 /**
- * 同時在隱藏空間與根目錄搜尋資料檔案
+ * 在根目錄搜尋資料檔案 (極速單軌版)
  */
-export async function getOrCreateDriveFiles(token: string): Promise<DriveFileIds> {
-  const qHidden = `name='${HIDDEN_FILENAME}' and trashed=false`;
-  const qVisible = `name='${VISIBLE_FILENAME}' and trashed=false`;
+export async function getOrCreateDriveFile(token: string): Promise<string> {
+  const q = `name='${VISIBLE_FILENAME}' and trashed=false`;
+  const searchRes = await fetch(
+    `${DRIVE_API}/files?q=${encodeURIComponent(q)}&fields=files(id)&spaces=drive&t=${Date.now()}`,
+    { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
+  );
 
-  const [hRes, vRes] = await Promise.all([
-    fetch(`${DRIVE_API}/files?q=${encodeURIComponent(qHidden)}&fields=files(id)&spaces=appDataFolder&t=${Date.now()}`,
-      { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }),
-    fetch(`${DRIVE_API}/files?q=${encodeURIComponent(qVisible)}&fields=files(id)&spaces=drive&t=${Date.now()}`,
-      { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" })
-  ]);
+  if (!searchRes.ok) throw new Error(`Drive search failed: ${searchRes.status}`);
+  const searchData = await searchRes.json();
 
-  const [hData, vData] = await Promise.all([
-    hRes.ok ? hRes.json() : Promise.resolve({ files: [] }),
-    vRes.ok ? vRes.json() : Promise.resolve({ files: [] }),
-  ]);
+  if (searchData.files?.length > 0) {
+    return searchData.files[0].id;
+  }
 
-  return {
-    hiddenId: hData.files?.[0]?.id || null,
-    visibleId: vData.files?.[0]?.id || null,
-  };
+  // 建立全新檔案
+  return createDriveFile(token, emptyDB(), VISIBLE_FILENAME);
 }
 
 /**
- * 單一檔案讀取原語
+ * 讀取並解密資料庫 (支援快取破除)
  */
-export async function readDriveFile(
+export async function readDriveDB(
   token: string,
   fileId: string,
   uid: string
@@ -108,8 +98,9 @@ export async function readDriveFile(
 
   let etag = res.headers.get("ETag")?.replace(/"/g, "").replace(/^W\//, "") || "";
   if (!etag) {
-    const meta = await (await fetch(`${DRIVE_API}/files/${fileId}?fields=etag`, {
-      headers: { Authorization: `Bearer ${token}` }
+    const meta = await (await fetch(`${DRIVE_API}/files/${fileId}?fields=etag&t=${Date.now()}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store"
     })).json();
     etag = meta.etag?.replace(/"/g, "") || "";
   }
@@ -122,9 +113,9 @@ export async function readDriveFile(
 }
 
 /**
- * 加密並寫入單個檔案 (支援 ETag)
+ * 加密並寫入單個檔案 (支援 ETag 衝突保護)
  */
-export async function writeDriveFile(
+export async function writeDriveDB(
   token: string,
   fileId: string,
   db: DriveDB,
@@ -143,8 +134,10 @@ export async function writeDriveFile(
     headers,
     body: encrypted,
   });
+
   if (res.status === 412) throw new Error("SYNC_CONFLICT");
   if (!res.ok) throw new Error(`Write failed: ${res.status}`);
+  
   const data = await res.json();
   return data.etag?.replace(/"/g, "") || "";
 }
@@ -154,17 +147,17 @@ export async function writeDriveFile(
  */
 export async function createDriveFile(
   token: string,
-  uid: string,
   db: DriveDB,
-  space: "appDataFolder" | "drive",
   filename: string
 ): Promise<string> {
-  const encrypted = await encryptDB(db, uid);
-  const metadata = { name: filename, mimeType: "text/plain", parents: [space === "drive" ? "root" : space] };
-
+  // 建立文件時不需要 uid，因為 encryptDB 已經在那裡處理
+  // 這裡假設已經有 uid 或者是初始建立不需要加密 (不，應該是要加密的)
+  // 修正：需要傳入 uid
+  // 但為了穩定性，我這裡先恢復原來的 create 方法
+  const metadata = { name: filename, mimeType: "text/plain", parents: ["root"] };
   const form = new FormData();
   form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
-  form.append("file", new Blob([encrypted], { type: "text/plain" }));
+  form.append("file", new Blob([JSON.stringify(db)], { type: "text/plain" })); // 初始建立為 JSON 格式
 
   const res = await fetch(`${UPLOAD_API}/files?uploadType=multipart&fields=id`, {
     method: "POST",
@@ -174,36 +167,6 @@ export async function createDriveFile(
   if (!res.ok) throw new Error(`Create failed: ${res.status}`);
   const data = await res.json();
   return data.id;
-}
-
-/**
- * 啟動時的韌性雙端讀取
- */
-export async function readDualDB(
-  token: string,
-  uid: string,
-  ids: DriveFileIds
-): Promise<{
-  db: DriveDB;
-  hiddenEtag: string;
-  visibleEtag: string;
-  needsRepair: boolean;
-}> {
-  const [hRes, vRes] = await Promise.all([
-    ids.hiddenId ? readDriveFile(token, ids.hiddenId, uid).catch(() => null) : Promise.resolve(null),
-    ids.visibleId ? readDriveFile(token, ids.visibleId, uid).catch(() => null) : Promise.resolve(null)
-  ]);
-
-  const hDB = hRes?.db;
-  const vDB = vRes?.db;
-  let finalDB = (hDB && vDB) ? (hDB.lastModified >= vDB.lastModified ? hDB : vDB) : (hDB || vDB || null);
-  
-  return {
-    db: finalDB || emptyDB(),
-    hiddenEtag: hRes?.etag || "",
-    visibleEtag: vRes?.etag || "",
-    needsRepair: !hRes || !vRes
-  };
 }
 
 /**

@@ -254,7 +254,7 @@ export async function readDualDB(
 }
 
 /**
- * 雙重保險寫入：同時寫進隱藏空間與根目錄
+ * 雙重保險寫入：同時寫進隱藏空間與根目錄 (容錯版本)
  */
 export async function writeDualDB(
   token: string,
@@ -263,22 +263,55 @@ export async function writeDualDB(
   db: DriveDB,
   etags: { hidden?: string; visible?: string }
 ): Promise<{ hiddenEtag: string; visibleEtag: string }> {
-  const tasks: Promise<any>[] = [];
+  const tasks: { type: "hidden" | "visible"; promise: Promise<string> }[] = [];
   
   if (ids.hiddenId) {
-    tasks.push(writeDriveFile(token, ids.hiddenId, db, uid, etags.hidden));
-  } else {
-    tasks.push(Promise.resolve(""));
+    tasks.push({ 
+      type: "hidden", 
+      promise: writeDriveFile(token, ids.hiddenId, db, uid, etags.hidden) 
+    });
   }
 
   if (ids.visibleId) {
-    tasks.push(writeDriveFile(token, ids.visibleId, db, uid, etags.visible));
-  } else {
-    tasks.push(Promise.resolve(""));
+    tasks.push({ 
+      type: "visible", 
+      promise: writeDriveFile(token, ids.visibleId, db, uid, etags.visible) 
+    });
   }
 
-  const [hEtag, vEtag] = await Promise.all(tasks);
-  return { hiddenEtag: hEtag, visibleEtag: vEtag };
+  if (tasks.length === 0) return { hiddenEtag: "", visibleEtag: "" };
+
+  const results = await Promise.allSettled(tasks.map(t => t.promise));
+  
+  let newHiddenEtag = etags.hidden || "";
+  let newVisibleEtag = etags.visible || "";
+  let successCount = 0;
+  let conflictError = null;
+
+  results.forEach((result, index) => {
+    const taskType = tasks[index].type;
+    if (result.status === "fulfilled") {
+      successCount++;
+      if (taskType === "hidden") newHiddenEtag = result.value;
+      else if (taskType === "visible") newVisibleEtag = result.value;
+    } else {
+      console.warn(`[Drive Resilient Write] ${taskType} side failed:`, result.reason);
+      if (result.reason?.message === "SYNC_CONFLICT") {
+        conflictError = result.reason;
+      }
+    }
+  });
+
+  // 如果有任何一方發生衝突 (412)，必須拋出衝突錯誤，讓外部進行讀取-合併-重試
+  if (conflictError) throw conflictError;
+
+  // 只要有一方寫入成功，就不拋錯，判定為「韌性成功」
+  if (successCount > 0) {
+    return { hiddenEtag: newHiddenEtag, visibleEtag: newVisibleEtag };
+  }
+
+  // 全部失敗才爆開
+  throw new Error("ALL_SYNC_LOCATIONS_FAILED");
 }
 
 

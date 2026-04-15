@@ -1,5 +1,20 @@
 # 更新日誌 (Changelog)
 
+## [2.3.0] - 2026-04-15
+### 🛡️ 數據救援與同步引擎硬化
+#### 數據救援 (Recovery)
+- **救援模式開通**：暫時恢復 `drive.file` 權限並重啟遷移邏輯，協助受影響用戶找回遺失資料。
+
+#### 同步加固 (Harden)
+- **防止靜默覆寫**：重構 `readDriveDB`，加密或讀取失敗時改為強行中斷同步並報錯，徹底防止空白資料庫被寫回雲端。
+- **衝突保護 (ETag)**：實作 Google Drive `ETag` 版本控制，在寫入時強制檢查版本一致性（If-Match），防止多端操作時發生資料覆蓋。
+
+#### 改良與優化 (Improvements)
+- **手動重水合 (Rehydration)**：優化登入後的本地解密流程，確保金鑰就緒後自動載入卡片。
+- **本地持久化加密**：實作 `localStorage` 等級的 AES-256-GCM 加密。
+
+---
+
 ## [2.2.0] - 2026-04-15
 ### 💎 體驗優化與權限極簡化
 #### 介面優化 (UX/UI)
@@ -7,7 +22,7 @@
 - **PWA 正式更名**：更新 `manifest.json` 配置，將 PWA 名稱從「智慧管家」全面統一為 **ZJ Card**。
 
 #### 權限與資安 (Privacy & Security)
-- **權限極簡化**：移除 Google Drive 的 `spreadsheets` 與 `drive.file` 權限，目前僅要求最小必要權限 `drive.appdata`。
+- <span className="font-black tracking-tight">ZJ Card</span> <span className="text-[10px] text-slate-300 ml-1 font-black align-top">v2.3.0</span>
 - **代碼精簡**：移除 v1 搬遷遷移邏輯，精簡 Drive 同步核心，提升系統穩定性。
 
 ---
@@ -16,7 +31,7 @@
 ### 🌟 ZJ Card 品牌化與安全升級
 
 #### 品牌與介面 (Branding & UI)
-- **全面品牌重塑**：更名為 **ZJ Card - 奇蹟卡**，並強化 Dashboard 視覺標題（極粗體）。
+- **全面品牌重塑**：更名為 ZJ Card • 奇蹟卡 <span className="text-[10px] text-slate-300 ml-1 font-black align-top">v2.3.0</span>
 - **Slogan 更新**：定義為「專屬於您的奇蹟卡管家」。
 - **介面去 7-11 化**：在品牌標語與標題中移除特定商家字樣，維持品牌獨立性。
 - **功能預留**：將「自訂商家」恢復為「待開發」狀態，保留未來擴充空間。

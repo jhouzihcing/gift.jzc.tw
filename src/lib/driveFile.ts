@@ -46,6 +46,7 @@ export async function getOrCreateDriveFile(
   token: string,
   uid: string
 ): Promise<string> {
+  // 1. 只搜尋 appDataFolder 空間
   const q = `name='${DB_FILENAME}' and trashed=false`;
   const searchRes = await fetch(
     `${DRIVE_API}/files?q=${encodeURIComponent(q)}&fields=files(id)&spaces=appDataFolder`,
@@ -59,7 +60,39 @@ export async function getOrCreateDriveFile(
     return searchData.files[0].id;
   }
 
-  // 找不到任何隱藏檔案，直接在 appDataFolder 建立全新的 JSON 檔案
+  // --- 救援邏輯 (Rescue): 若隱藏空間找不到，去根目錄找找看有沒有舊檔案 ---
+  // 注意：這需要 https://www.googleapis.com/auth/drive.file 權限
+  const qRoot = `name='${DB_FILENAME}' and trashed=false`;
+  const rootSearchRes = await fetch(
+    `${DRIVE_API}/files?q=${encodeURIComponent(qRoot)}&fields=files(id)&spaces=drive`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+
+  if (rootSearchRes.ok) {
+    const rootSearchData = await rootSearchRes.json();
+    if (rootSearchData.files?.length > 0) {
+      const oldFileId = rootSearchData.files[0].id;
+      console.log("[Drive Rescue] 發現根目錄舊檔案，準備搬家至 appDataFolder...");
+
+      try {
+        // 1. 讀取舊檔案內容 (相容明文或加密)
+        const oldDB = await readDriveDB(token, oldFileId, uid);
+
+        // 2. 在 appDataFolder 建立新的加密檔案
+        // 注意：這裡傳入的 DB 物件會被 createNewDriveFile 加密
+        const newFileId = await createNewDriveFile(token, uid, typeof oldDB === 'object' && 'db' in oldDB ? (oldDB as any).db : oldDB);
+
+        // 3. 標記舊檔案（可以移動到垃圾桶，但為了安全起見，我們暫時先保留在原地，只需成功搬家即可）
+        // 或者我們可以選擇不刪除，讓使用者安心，但搬家成功後 return 新 ID 即可。
+        console.log("[Drive Rescue] 搬家成功！新 ID:", newFileId);
+        return newFileId;
+      } catch (error) {
+        console.error("[Drive Rescue] 搬家失敗，將建立全新資料庫:", error);
+      }
+    }
+  }
+
+  // 找不到任何資料，建立全新的 JSON 檔案
   return createNewDriveFile(token, uid, emptyDB());
 }
 
@@ -90,13 +123,21 @@ async function createNewDriveFile(token: string, uid: string, db: DriveDB): Prom
 }
 
 /**
- * 從 Drive 讀取並解密完整資料庫（1 次 API 呼叫）
+ * 從 Drive 讀取並解密完整資料庫
+ * 回傳值包含 db 本體與用於防衝突的 etag
  */
 export async function readDriveDB(
   token: string,
   fileId: string,
   uid: string
-): Promise<DriveDB> {
+): Promise<{ db: DriveDB; etag: string }> {
+  // 取得 metadata 以獲取 etag
+  const metaRes = await fetch(
+    `${DRIVE_API}/files/${fileId}?fields=etag`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  const { etag } = await metaRes.json();
+
   const res = await fetch(
     `${DRIVE_API}/files/${fileId}?alt=media`,
     { headers: { Authorization: `Bearer ${token}` } }
@@ -104,50 +145,62 @@ export async function readDriveDB(
 
   if (!res.ok) throw new Error(`Drive read failed: ${res.status}`);
 
-  try {
-    const ciphertext = await res.text();
+  const ciphertext = await res.text();
 
-    // 相容性處理：若是舊格式（明文 JSON），直接解析後回傳
-    if (ciphertext.trimStart().startsWith("{")) {
-      console.warn("[Drive] 偵測到未加密的舊格式資料，將在下次寫入時自動升級為加密版本");
-      return JSON.parse(ciphertext) as DriveDB;
-    }
-
-    return await decryptDB(ciphertext, uid);
-  } catch {
-    // 若檔案損毀則回傳空資料庫
-    console.error("[Drive] 解密失敗，回傳空資料庫");
-    return emptyDB();
+  // 相容性處理：若是舊格式（明文 JSON），直接解析後回傳
+  if (ciphertext.trimStart().startsWith("{")) {
+    console.warn("[Drive] 偵測到未加密的舊格式資料");
+    return { db: JSON.parse(ciphertext) as DriveDB, etag };
   }
+
+  // 嚴格模式：若解密失敗，拋出錯誤，不可回傳空資料庫（防止覆寫雲端）
+  const db = await decryptDB(ciphertext, uid);
+  return { db, etag };
 }
 
 /**
- * 加密後寫入 Drive（1 次原子 API 呼叫，覆蓋寫入）
+ * 加密後寫入 Drive
+ * 使用 If-Match 標頭配合 etag，防止覆蓋掉其他裝置的更新
  */
 export async function writeDriveDB(
   token: string,
   fileId: string,
   db: DriveDB,
-  uid: string
-): Promise<void> {
+  uid: string,
+  etag?: string
+): Promise<string> {
   const encryptedContent = await encryptDB(
     { ...db, lastModified: Date.now() },
     uid
   );
 
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "text/plain",
+  };
+
+  // 如果提供 etag，則進行衝突檢查
+  if (etag) {
+    headers["If-Match"] = etag;
+  }
+
   const res = await fetch(
-    `${UPLOAD_API}/files/${fileId}?uploadType=media`,
+    `${UPLOAD_API}/files/${fileId}?uploadType=media&fields=etag`,
     {
       method: "PATCH",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "text/plain",
-      },
+      headers,
       body: encryptedContent,
     }
   );
 
+  if (res.status === 412) {
+    throw new Error("SYNC_CONFLICT"); // 外部需處理衝突重試
+  }
+
   if (!res.ok) throw new Error(`Drive write failed: ${res.status}`);
+  
+  const data = await res.json();
+  return data.etag; // 回傳新的 etag
 }
 
 /**

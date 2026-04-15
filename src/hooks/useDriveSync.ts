@@ -13,6 +13,7 @@ export function useDriveSync() {
   const { user, setSyncStatus, setSyncError } = useAuthStore();
   const { setCards, markCardSynced, isInitialized, finishInitialization, addCustomMerchant } = useCardStore();
   const fileIdRef = useRef<string | null>(null);
+  const etagRef = useRef<string | null>(null);
 
   // 寫入鎖：防止並發寫入造成資料競爭
   const writeInProgress = useRef(false);
@@ -32,7 +33,8 @@ export function useDriveSync() {
       setSyncStatus(true, useAuthStore.getState().lastSync);
       
       // 讀取一次 → 批量更新記憶體 → 寫入一次
-      const db = await readDriveDB(user.driveToken, fileIdRef.current, user.uid);
+      const { db, etag } = await readDriveDB(user.driveToken, fileIdRef.current, user.uid);
+      etagRef.current = etag;
 
       for (const card of cardsToSync) {
         // 移除前端專用欄位，只存純資料
@@ -45,7 +47,8 @@ export function useDriveSync() {
         }
       }
 
-      await writeDriveDB(user.driveToken, fileIdRef.current, db, user.uid);
+      const newEtag = await writeDriveDB(user.driveToken, fileIdRef.current, db, user.uid, etagRef.current || undefined);
+      etagRef.current = newEtag;
 
       // 標記這批卡片已同步
       for (const card of cardsToSync) {
@@ -53,8 +56,17 @@ export function useDriveSync() {
       }
 
       setSyncStatus(false, Date.now());
-    } catch (e) {
+    } catch (e: any) {
       console.error("[Drive Sync] Flush failed:", e);
+      
+      // 如果是衝突，立即觸發一次重新同步
+      if (e.message === "SYNC_CONFLICT") {
+        console.warn("[Drive Sync] Detect conflict, retrying...");
+        writeInProgress.current = false;
+        pendingCards.current = [...cardsToSync, ...pendingCards.current];
+        flushPending();
+        return;
+      }
       // 寫入失敗：把這批卡片塞回隊列等待重試
       pendingCards.current = [...cardsToSync, ...pendingCards.current];
       for (const card of cardsToSync) {
@@ -87,7 +99,8 @@ export function useDriveSync() {
         const fileId = await getOrCreateDriveFile(user.driveToken!, user.uid);
         fileIdRef.current = fileId;
 
-        const db = await readDriveDB(user.driveToken!, fileId, user.uid);
+        const { db, etag } = await readDriveDB(user.driveToken!, fileId, user.uid);
+        etagRef.current = etag;
 
         // 垃圾桶大掃除（15 天）
         const { db: cleanedDb, changed } = cleanupTrash(db);
@@ -125,7 +138,8 @@ export function useDriveSync() {
 
         // 若清理了過期卡片，回寫雲端
         if (changed) {
-          await writeDriveDB(user.driveToken!, fileId, cleanedDb, user.uid);
+          const newEtag = await writeDriveDB(user.driveToken!, fileId, cleanedDb, user.uid, etagRef.current || undefined);
+          etagRef.current = newEtag;
         }
 
         setSyncStatus(false, Date.now());

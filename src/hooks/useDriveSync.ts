@@ -8,6 +8,7 @@ import {
   cleanupTrash,
   migrateOldVisibleFile,
   DriveCard,
+  DriveDB,
 } from "@/lib/driveFile";
 
 export function useDriveSync() {
@@ -16,11 +17,12 @@ export function useDriveSync() {
   
   const fileIdRef = useRef<string | null>(null);
   const etagRef = useRef<string | null>(null);
+  const dbRef = useRef<DriveDB | null>(null);
 
   const writeInProgress = useRef(false);
   const pendingCards = useRef<DriveCard[]>([]);
 
-  // ─── 核心寫入器（地表最快版：1 讀 1 寫）─────────────────────────────
+  // ─── 核心寫入器（閃電快傳版：跳過重複讀取，直擊寫入）─────────────────────────────
   const flushPending = useCallback(async () => {
     if (writeInProgress.current || pendingCards.current.length === 0) return;
     if (!user?.driveToken || !fileIdRef.current) return;
@@ -32,11 +34,18 @@ export function useDriveSync() {
     try {
       setSyncStatus(true, useAuthStore.getState().lastSync);
       
-      // 1. 同步讀取（確版本對齊，支援防快取）
-      const { db, etag } = await readDriveDB(user.driveToken, fileIdRef.current, user.uid);
-      etagRef.current = etag;
+      // 1. 取得基本資料庫（若無則從雲端讀取一次，之後都走樂觀模式）
+      let db: DriveDB;
+      if (!dbRef.current) {
+        const res = await readDriveDB(user.driveToken, fileIdRef.current, user.uid);
+        db = res.db;
+        etagRef.current = res.etag;
+        dbRef.current = db;
+      } else {
+        db = dbRef.current;
+      }
 
-      // 2. 注入變動
+      // 2. 注入變動到記憶體
       for (const card of cardsToSync) {
         const { isSynced: _, ...cardData } = card as any;
         const idx = db.cards.findIndex(c => c.id === cardData.id);
@@ -44,28 +53,51 @@ export function useDriveSync() {
         else db.cards.push(cardData);
       }
 
-      // 3. 寫入雲端（單軌極速）
-      const newEtag = await writeDriveDB(user.driveToken, fileIdRef.current, db, user.uid, etagRef.current || undefined);
-      etagRef.current = newEtag;
+      // 3. 閃電寫入：直接噴發到雲端，跳過「寫前讀取」
+      try {
+        const newEtag = await writeDriveDB(user.driveToken, fileIdRef.current, db, user.uid, etagRef.current || undefined);
+        etagRef.current = newEtag;
+        dbRef.current = db; // 更新本地最新副本
+      } catch (writeErr: any) {
+        // 如果發生衝突 (412)，代表雲端有更老的版本，此時才乖乖回去讀取合併
+        if (writeErr.message === "SYNC_CONFLICT") {
+          console.warn("[Drive Flash Sync] Conflict detected, falling back to read-merge-write.");
+          const res = await readDriveDB(user.driveToken, fileIdRef.current, user.uid);
+          const freshDb = res.db;
+          
+          // 重新合併變動
+          for (const card of cardsToSync) {
+            const { isSynced: _, ...cardData } = card as any;
+            const idx = freshDb.cards.findIndex(c => c.id === cardData.id);
+            if (idx !== -1) freshDb.cards[idx] = cardData;
+            else freshDb.cards.push(cardData);
+          }
+
+          const finalEtag = await writeDriveDB(user.driveToken, fileIdRef.current, freshDb, user.uid, res.etag);
+          etagRef.current = finalEtag;
+          dbRef.current = freshDb;
+        } else {
+          throw writeErr;
+        }
+      }
 
       // 4. 標記成功並釋放 UI
       for (const card of cardsToSync) markCardSynced(card.id, true);
       setSyncStatus(false, Date.now());
 
     } catch (e: any) {
-      console.error("[Drive Sync] Flush failed:", e);
+      console.error("[Drive Sync] Flash Sync failed:", e);
       pendingCards.current = [...cardsToSync, ...pendingCards.current];
       if (e.message !== "SYNC_CONFLICT") setSyncError(true);
     } finally {
       writeInProgress.current = false;
-      // 檢查是否還有新任務
       setTimeout(() => {
         if (!writeInProgress.current && pendingCards.current.length > 0) flushPending();
       }, 300);
     }
   }, [user?.driveToken, markCardSynced, setSyncStatus, setSyncError]);
 
-  // ─── 1. 初始化：極速載入流程 ─────────────────────────
+  // ─── 1. 初始化：載入並填充記憶體緩存 ─────────────────────────
   useEffect(() => {
     if (!user?.driveToken) return;
 
@@ -76,18 +108,14 @@ export function useDriveSync() {
 
         await (useCardStore.persist as any).rehydrate();
 
-        // A. 檔名遷移 (英文優先標竿)
         await migrateOldVisibleFile(user.driveToken!);
-
-        // B. 尋找根目錄檔案
         const fileId = await getOrCreateDriveFile(user.driveToken!);
         fileIdRef.current = fileId;
 
-        // C. 讀取資料
         const { db, etag } = await readDriveDB(user.driveToken!, fileId, user.uid);
         etagRef.current = etag;
+        dbRef.current = db; // 初始填充緩存，這讓之後的 flush 速度極快
 
-        // D. 垃圾桶與本地合併
         const { db: cleanedDb, changed } = cleanupTrash(db);
         const { cards: localCards } = useCardStore.getState();
         const cardMap = new Map();
@@ -99,10 +127,10 @@ export function useDriveSync() {
           cleanedDb.customMerchants.forEach(m => addCustomMerchant(m));
         }
 
-        // 若清理了垃圾，回寫一次
         if (changed) {
           const newEtag = await writeDriveDB(user.driveToken!, fileId, cleanedDb, user.uid, etagRef.current || undefined);
           etagRef.current = newEtag;
+          dbRef.current = cleanedDb;
         }
 
         setSyncStatus(false, Date.now());
@@ -127,7 +155,7 @@ export function useDriveSync() {
         flushPending();
       }
     };
-    const timer = setInterval(processQueue, 30000); // 30 秒定期掃描
+    const timer = setInterval(processQueue, 30000);
     processQueue();
     return () => clearInterval(timer);
   }, [user?.driveToken, isInitialized, flushPending]);

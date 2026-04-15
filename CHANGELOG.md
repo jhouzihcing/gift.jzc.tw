@@ -1,5 +1,11 @@
 # 更新日誌 (Changelog)
 
+## [2.3.1] - 2026-04-15
+### ⚙️ 版本管理自動化
+- **自動化版號同步**：建立中央版號管理機制 (`src/constants/version.ts`)，修復原本「設定頁面」版號落後的問題。現在網頁內所有版本號將永遠保持同步。
+
+---
+
 ## [2.3.0] - 2026-04-15
 ### 🛡️ 數據救援與同步引擎硬化
 #### 數據救援 (Recovery)
@@ -21,9 +27,8 @@
 - **修復 iPhone Safe Area**：針對 PWA 模式實作 `safe-area-inset-top` 保護，解決頂部標題與系統時間/電池欄位重疊之問題。
 - **PWA 正式更名**：更新 `manifest.json` 配置，將 PWA 名稱從「智慧管家」全面統一為 **ZJ Card**。
 
-#### 權限與資安 (Privacy & Security)
-- <span className="font-black tracking-tight">ZJ Card</span> <span className="text-[10px] text-slate-300 ml-1 font-black align-top">v2.3.0</span>
-- **代碼精簡**：移除 v1 搬遷遷移邏輯，精簡 Drive 同步核心，提升系統穩定性。
+- **權限與資安 (Privacy & Security)**：暫時恢復權限進行數據救援，並強化同步穩定性。
+- **代碼精簡**：改善 Drive 同步核心，提升系統穩定性。
 
 ---
 
@@ -31,7 +36,7 @@
 ### 🌟 ZJ Card 品牌化與安全升級
 
 #### 品牌與介面 (Branding & UI)
-- **全面品牌重塑**：更名為 ZJ Card • 奇蹟卡 <span className="text-[10px] text-slate-300 ml-1 font-black align-top">v2.3.0</span>
+- **全面品牌重塑**：更名為 **ZJ Card - 奇蹟卡**，並強化 Dashboard 視覺標題（極粗體）。
 - **Slogan 更新**：定義為「專屬於您的奇蹟卡管家」。
 - **介面去 7-11 化**：在品牌標語與標題中移除特定商家字樣，維持品牌獨立性。
 - **功能預留**：將「自訂商家」恢復為「待開發」狀態，保留未來擴充空間。

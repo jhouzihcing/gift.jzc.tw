@@ -46,8 +46,9 @@ export default function Dashboard() {
                className="w-full h-full object-contain"
              />
           </div>
-            <span className="font-black tracking-tight">ZJ Card</span> <span className="text-[10px] text-slate-300 ml-1 font-black align-top">v2.2.0</span>
+            <span className="font-black tracking-tight">ZJ Card</span> <span className="text-[10px] text-slate-300 ml-1 font-black align-top">v2.3.0</span>
         </div>
+
         <div className="flex items-center gap-2 bg-white/50 backdrop-blur-md px-3 py-1.5 rounded-full border border-slate-100 shadow-sm">
            <div className={`w-2 h-2 rounded-full ${
              syncError ? 'bg-red-500 animate-pulse shadow-[0_0_8px_red]' : 

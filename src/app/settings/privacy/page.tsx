@@ -40,15 +40,25 @@ export default function PrivacyPage() {
           {/* 詳細條款 */}
           <div className="flex flex-col gap-6 px-2">
              
-             {/* 1. 數據主權與隱藏儲存 */}
+             {/* 1. 雙軌儲存與雙重保險 */}
              <section className="space-y-3">
                 <div className="flex items-center gap-2 text-[#34DA4F]">
                    <Database size={18} />
-                   <h3 className="font-black uppercase tracking-widest text-xs">隱藏儲存與數據主權</h3>
+                   <h3 className="font-black uppercase tracking-widest text-xs">雙重保險與數據主權</h3>
                 </div>
                 <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-3 text-sm text-slate-600 leading-relaxed font-bold">
-                   <p>本程式通過 Google OAuth 授權，將資料存放於您 Google Drive 的特殊隔離區域 <code className="bg-slate-50 px-2 py-1 rounded text-slate-800">Application Data Folder</code>。</p>
-                   <p className="text-[#34DA4F]">此空間對使用者完全隱藏，無法透過 Drive UI 直接讀取或刪除，確保您的資產清單不會因意外操作而遺失。</p>
+                   <p>本程式透過 Google Web 技術，將您的卡片資料以「雙軌制」進行備份同步，確保資料零風險：</p>
+                   <div className="flex flex-col gap-2 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                      <p className="flex items-start gap-2">
+                         <span className="w-1.5 h-1.5 rounded-full bg-[#34DA4F] mt-1.5 flex-shrink-0" />
+                         <span><strong className="text-slate-800">隱性位置：</strong>存於 Google Drive 的隔離區 <code className="bg-white px-1.5 rounded border">appDataFolder</code>，具有防誤刪特性。</span>
+                      </p>
+                      <p className="flex items-start gap-2">
+                         <span className="w-1.5 h-1.5 rounded-full bg-[#34DA4F] mt-1.5 flex-shrink-0" />
+                         <span><strong className="text-slate-800">顯性位置：</strong>於根目錄生成 <code className="bg-white px-1.5 rounded border italic">zc-card 請勿刪除...json</code>，供您隨時查看與手動備份。</span>
+                      </p>
+                   </div>
+                   <p className="text-[#34DA4F]">當其中一個檔案被外力刪除時，系統會自動利用另一端的備份進行「鏡像修復」，確保資產清單始終安全。</p>
                    <p>我們嚴格遵守台灣《個人資料保護法》，除了您的 Email 外，本平台不收集、不儲存任何個人識別資訊 (PII)。</p>
                 </div>
              </section>
@@ -102,7 +112,7 @@ export default function PrivacyPage() {
           </div>
 
           <p className="text-center text-[10px] text-slate-300 font-bold uppercase tracking-widest mt-4">
-             Versoin 2.1.0 (TLS Encryption Edition) • 2026.04
+             Version 2.4.1 (Double Insurance Edition) • 2026.04
           </p>
 
         </main>

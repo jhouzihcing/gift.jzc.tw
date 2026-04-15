@@ -14,7 +14,7 @@ export interface Card {
   amount: number;
   createdAt: number;
   deletedAt: number | null;
-  status: CardStatus; // 新增狀態標籤
+  status: CardStatus;
   isSynced?: boolean;
 }
 
@@ -23,6 +23,11 @@ interface CardStore {
   isPro: boolean;
   isInitialized: boolean;
   customMerchants: string[];
+  
+  // v2.12.0 極速閃電佇列
+  syncQueue: string[];
+  isGlobalSyncing: boolean;
+  
   addCard: (newCard: Card) => boolean;
   setCards: (cards: Card[]) => void;
   setProStatus: (isPro: boolean) => void;
@@ -31,6 +36,8 @@ interface CardStore {
   deletePermanently: (id: string) => void;
   addCustomMerchant: (merchant: string) => void;
   markCardSynced: (id: string, isSynced: boolean) => void;
+  setGlobalSyncing: (isSyncing: boolean) => void;
+  removeFromQueue: (ids: string[]) => void;
   finishInitialization: () => void;
 }
 
@@ -41,12 +48,19 @@ export const useCardStore = create<CardStore>()(
       isPro: false,
       isInitialized: false,
       customMerchants: [],
+      syncQueue: [],
+      isGlobalSyncing: false,
 
       finishInitialization: () => set({ isInitialized: true }),
 
+      setGlobalSyncing: (isSyncing) => set({ isGlobalSyncing: isSyncing }),
+
+      removeFromQueue: (ids) => set((state) => ({
+        syncQueue: state.syncQueue.filter(id => !ids.includes(id))
+      })),
+
       addCard: (newCard) => {
         const { cards, isPro } = get();
-
         const isDuplicate = cards.some(c => c.barcode === newCard.barcode);
         if (isDuplicate) {
           alert("⚠️ 此卡片早已被掃描存檔，請更換下一張！");
@@ -59,29 +73,36 @@ export const useCardStore = create<CardStore>()(
           return false;
         }
 
-        set((state) => ({ cards: [...state.cards, { ...newCard, status: "Active" }] }));
+        const cardWithStatus = { ...newCard, status: "Active" as CardStatus, isSynced: false };
+        set((state) => ({ 
+          cards: [...state.cards, cardWithStatus],
+          syncQueue: [...state.syncQueue, newCard.id]
+        }));
         return true;
       },
 
       moveToTrash: (id) => {
         set((state) => ({
           cards: state.cards.map(c => 
-            c.id === id ? { ...c, deletedAt: Date.now(), status: "Trashed", isSynced: false } : c
-          )
+            c.id === id ? { ...c, deletedAt: Date.now(), status: "Trashed" as CardStatus, isSynced: false } : c
+          ),
+          syncQueue: Array.from(new Set([...state.syncQueue, id]))
         }));
       },
 
       restoreFromTrash: (id) => {
         set((state) => ({
           cards: state.cards.map(c => 
-            c.id === id ? { ...c, deletedAt: null, status: "Active", isSynced: false } : c
-          )
+            c.id === id ? { ...c, deletedAt: null, status: "Active" as CardStatus, isSynced: false } : c
+          ),
+          syncQueue: Array.from(new Set([...state.syncQueue, id]))
         }));
       },
 
       deletePermanently: (id) => {
         set((state) => ({
-          cards: state.cards.filter(c => c.id !== id)
+          cards: state.cards.filter(c => c.id !== id),
+          syncQueue: state.syncQueue.filter(qid => qid !== id)
         }));
       },
 

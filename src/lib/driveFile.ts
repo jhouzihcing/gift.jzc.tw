@@ -74,10 +74,10 @@ export async function getOrCreateDriveFiles(token: string): Promise<DriveFileIds
   const qVisible = `name='${VISIBLE_FILENAME}' and trashed=false`;
 
   const [hRes, vRes] = await Promise.all([
-    fetch(`${DRIVE_API}/files?q=${encodeURIComponent(qHidden)}&fields=files(id)&spaces=appDataFolder`,
-      { headers: { Authorization: `Bearer ${token}` } }),
-    fetch(`${DRIVE_API}/files?q=${encodeURIComponent(qVisible)}&fields=files(id)&spaces=drive`,
-      { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${DRIVE_API}/files?q=${encodeURIComponent(qHidden)}&fields=files(id)&spaces=appDataFolder&t=${Date.now()}`,
+      { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }),
+    fetch(`${DRIVE_API}/files?q=${encodeURIComponent(qVisible)}&fields=files(id)&spaces=drive&t=${Date.now()}`,
+      { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" })
   ]);
 
   const [hData, vData] = await Promise.all([
@@ -99,8 +99,10 @@ export async function readDriveFile(
   fileId: string,
   uid: string
 ): Promise<{ db: DriveDB; etag: string }> {
-  const res = await fetch(`${DRIVE_API}/files/${fileId}?alt=media`, {
-    headers: { Authorization: `Bearer ${token}` }
+  // 加入時間戳記避免瀏覽器快取 (Cache Busting)
+  const res = await fetch(`${DRIVE_API}/files/${fileId}?alt=media&t=${Date.now()}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store"
   });
   if (!res.ok) throw new Error(`Read Failed: ${res.status}`);
 

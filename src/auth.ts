@@ -48,14 +48,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, account }) {
-      // 第一次登入時儲存 access_token 及 refresh_token
-      if (account) {
+    async jwt({ token, account, profile }) {
+      // 第一次登入或刷新時儲存必要資訊
+      if (account && profile) {
         return {
           ...token,
           accessToken: account.access_token,
           refreshToken: account.refresh_token,
           accessTokenExpires: Date.now() + (Number(account.expires_in) || 3600) * 1000,
+          // v2.21.0: 強制鎖定 providerAccountId 為絕對穩定的 UID
+          uid: (profile as any).sub || account.providerAccountId,
         };
       }
 
@@ -70,8 +72,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
     async session({ session, token }) {
       (session as any).accessToken = token.accessToken;
-      (session as any).uid = token.sub; // 傳給前端作為 AES 金鑰種子
-      (session as any).error = token.error; // 傳遞給前端以偵測刷新失敗
+      // 確保跨裝置一致性
+      (session as any).uid = token.uid || token.sub; 
+      (session as any).error = token.error; 
       return session;
     },
   },

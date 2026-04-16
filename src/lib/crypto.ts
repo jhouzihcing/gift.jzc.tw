@@ -1,15 +1,14 @@
 /**
- * 用戶端 AES-256-GCM 加密工具
+ * 用戶端 AES-256-GCM 加密工具 (v2.20.0 強韌版)
  * ─────────────────────────────────────────────
- * 不需要使用者額外記密碼：以 Google UID 為種子，
- * 透過 PBKDF2 衍生 256-bit AES-GCM 金鑰。
- * 雲端只儲存密文，任何第三方（含 Google）皆無法解讀。
+ * 優化：
+ * 1. 增加 getKeyHash 用於跨裝置手動校驗金鑰一致性。
+ * 2. 強化 Base64 轉換，避免在大數據下發生堆疊溢位或編碼偏移。
  */
 
 import type { DriveDB } from "./driveFile";
 
-// 固定 salt（非機密，用途是讓 PBKDF2 具備 domain separation）
-const SALT_HEX = "5367636d2d76312d73616c74"; // "sgcm-v1-salt" in hex
+const SALT_HEX = "5367636d2d76312d73616c74"; // "sgcm-v1-salt"
 const ITERATIONS = 100_000;
 
 function hexToUint8(hex: string): Uint8Array {
@@ -18,6 +17,16 @@ function hexToUint8(hex: string): Uint8Array {
     bytes[i / 2] = parseInt(hex.substring(i, 2 + i), 16);
   }
   return bytes;
+}
+
+/**
+ * 取得當前金鑰的校驗碼 (Hash)
+ */
+export async function getKeyHash(uid: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const hashBuffer = await crypto.subtle.digest("SHA-256", encoder.encode(uid));
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 12);
 }
 
 /**
@@ -48,8 +57,30 @@ async function deriveKey(uid: string): Promise<CryptoKey> {
 }
 
 /**
+ * 穩定版 Uint8Array 轉 Base64
+ */
+function uint8ToBase64(arr: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < arr.byteLength; i++) {
+    binary += String.fromCharCode(arr[i]);
+  }
+  return btoa(binary);
+}
+
+/**
+ * 穩定版 Base64 轉 Uint8Array
+ */
+function base64ToUint8(b64: string): Uint8Array {
+  const binary = atob(b64);
+  const arr = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    arr[i] = binary.charCodeAt(i);
+  }
+  return arr;
+}
+
+/**
  * 將 DriveDB 加密成 Base64 字串後上傳至 Drive
- * 格式：<12 bytes IV (Base64)>.<密文 (Base64)>
  */
 export async function encryptDB(db: DriveDB, uid: string): Promise<string> {
   const key = await deriveKey(uid);
@@ -62,27 +93,24 @@ export async function encryptDB(db: DriveDB, uid: string): Promise<string> {
     plaintext
   );
 
-  const ivB64 = btoa(String.fromCharCode(...iv));
-  const cipherB64 = btoa(
-    String.fromCharCode(...new Uint8Array(cipherBuf))
-  );
+  const ivB64 = uint8ToBase64(iv);
+  const cipherB64 = uint8ToBase64(new Uint8Array(cipherBuf));
 
   return `${ivB64}.${cipherB64}`;
 }
 
 /**
  * 將從 Drive 讀回的密文解密成 DriveDB
- * 若解密失敗（如金鑰錯誤或舊格式 JSON），拋出錯誤由呼叫端處理
  */
 export async function decryptDB(ciphertext: string, uid: string): Promise<DriveDB> {
   const [ivB64, cipherB64] = ciphertext.split(".");
   if (!ivB64 || !cipherB64) {
-    throw new Error("Invalid ciphertext format");
+    throw new Error("格式錯誤：密文結構不完整");
   }
 
   const key = await deriveKey(uid);
-  const iv = Uint8Array.from(atob(ivB64), (c) => c.charCodeAt(0));
-  const cipherBuf = Uint8Array.from(atob(cipherB64), (c) => c.charCodeAt(0));
+  const iv = base64ToUint8(ivB64);
+  const cipherBuf = base64ToUint8(cipherB64);
 
   const plainBuf = await crypto.subtle.decrypt(
     { name: "AES-GCM", iv },
@@ -94,7 +122,7 @@ export async function decryptDB(ciphertext: string, uid: string): Promise<DriveD
 }
 
 /**
- * 將內容加密後回傳格式：<IV Base64>.<Ciphertext Base64>
+ * 本地 Storage 加密
  */
 export async function encryptText(text: string, uid: string): Promise<string> {
   const key = await deriveKey(uid);
@@ -107,24 +135,19 @@ export async function encryptText(text: string, uid: string): Promise<string> {
     plaintext
   );
 
-  const ivB64 = btoa(String.fromCharCode(...iv));
-  const cipherB64 = btoa(
-    String.fromCharCode(...new Uint8Array(cipherBuf))
-  );
-
-  return `${ivB64}.${cipherB64}`;
+  return `${uint8ToBase64(iv)}.${uint8ToBase64(new Uint8Array(cipherBuf))}`;
 }
 
 /**
- * 解密內容，若失敗拋出錯誤
+ * 本地 Storage 解密
  */
 export async function decryptText(encrypted: string, uid: string): Promise<string> {
   const [ivB64, cipherB64] = encrypted.split(".");
-  if (!ivB64 || !cipherB64) throw new Error("Invalid format");
+  if (!ivB64 || !cipherB64) throw new Error("Format invalid");
 
   const key = await deriveKey(uid);
-  const iv = Uint8Array.from(atob(ivB64), (c) => c.charCodeAt(0));
-  const cipherBuf = Uint8Array.from(atob(cipherB64), (c) => c.charCodeAt(0));
+  const iv = base64ToUint8(ivB64);
+  const cipherBuf = base64ToUint8(cipherB64);
 
   const plainBuf = await crypto.subtle.decrypt(
     { name: "AES-GCM", iv },
@@ -134,4 +157,3 @@ export async function decryptText(encrypted: string, uid: string): Promise<strin
 
   return new TextDecoder().decode(plainBuf);
 }
-

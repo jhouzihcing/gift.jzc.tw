@@ -48,7 +48,7 @@ export async function listAllAppDataFiles(token: string): Promise<{ id: string, 
 }
 
 /**
- * 搜尋或建立資料檔案 (v2.19.0 診斷加強版)
+ * 搜尋或建立資料檔案
  */
 export async function getOrCreateDriveFile(
   token: string, 
@@ -88,15 +88,12 @@ export async function getOrCreateDriveFile(
     }
   }
 
-  // Nuclear Search: 如果是隱藏空間且搜尋不到特定檔名，檢索該空間所有檔案
+  // Nuclear Search
   if (space === 'appDataFolder') {
-    logFn?.(`⚠️ 常規搜尋失敗，啟動全域掃描 (Nuclear Search)...`);
+    logFn?.(`⚠️ 常規搜尋失敗，啟動全域掃描...`);
     const allFiles = await listAllAppDataFiles(token);
     if (allFiles.length > 0) {
-      logFn?.(`📢 全域發現 ${allFiles.length} 個隱藏檔案，但無一匹配目標名。`);
-      allFiles.forEach(f => logFn?.(`  - [${f.name}] ID: ${f.id}`));
-    } else {
-      logFn?.(`📢 隱藏空間空空如也，確定曾有資料？`);
+      logFn?.(`📢 全域發現 ${allFiles.length} 個隱藏檔案，但無目標名稱。`);
     }
   }
 
@@ -129,15 +126,17 @@ export async function getOrCreateDriveFile(
 }
 
 /**
- * 讀取資料 (v2.19.0 診斷版)
+ * 讀取資料 (v2.21.0 支援雙金鑰校對)
+ * @param fallbackUid 通常傳入 user.email
  */
 export async function readDriveDB(
   token: string,
   fileId: string,
   uid: string,
-  logFn?: (msg: string) => void
+  logFn?: (msg: string) => void,
+  fallbackUid?: string
 ): Promise<{ db: DriveDB }> {
-  logFn?.(`📡 正在從雲端抓取原始數據 (ID: ${fileId})...`);
+  logFn?.(`📡 正在從雲端抓取原始數據 (ID: ${fileId.slice(0, 8)})...`);
   const res = await fetch(`${DRIVE_API}/files/${fileId}?alt=media&t=${Date.now()}`, {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
@@ -148,19 +147,36 @@ export async function readDriveDB(
   }
 
   const ciphertext = await res.text();
-  logFn?.(`🗳️ 數據抓取完畢，大小: ${ciphertext.length} 位元組`);
+  
+  // 1. 如果是明文，直接返回
+  if (ciphertext.trimStart().startsWith("{")) {
+    logFn?.(`🔓 偵測為明文 JSON，直接解析。`);
+    return { db: JSON.parse(ciphertext) as DriveDB };
+  }
 
+  // 2. 嘗試主要 UID 解密
   try {
-    if (ciphertext.trimStart().startsWith("{")) {
-      logFn?.(`🔓 此為明文 JSON，直接解析成功。`);
-      return { db: JSON.parse(ciphertext) as DriveDB };
-    }
+    logFn?.(`🔓 嘗試使用系統 ID 進行解密...`);
     const decrypted = await decryptDB(ciphertext, uid);
-    logFn?.(`🔓 加密數據解密成功，內含 ${decrypted.cards.length} 張卡片。`);
+    logFn?.(`✅ 系統 ID 解密成功！數據內含 ${decrypted.cards.length} 張卡片。`);
     return { db: decrypted };
-  } catch (e: any) {
-    logFn?.(`🔥 解密失敗！請檢查 UID 是否與原設備一致。錯誤: ${e.message}`);
-    throw e;
+  } catch (e) {
+    logFn?.(`⚠️ 系統 ID 解密失敗，嘗試使用 Email 作為救援金鑰...`);
+    
+    // 3. Fallback: 使用 Email (fallbackUid) 解密
+    if (fallbackUid) {
+       try {
+         const decryptedFallback = await decryptDB(ciphertext, fallbackUid);
+         logFn?.(`✅ Email 救援成功！已成功找回跨裝置資料。`);
+         return { db: decryptedFallback };
+       } catch (fe) {
+         logFn?.(`🔥 本帳號所有金鑰皆無法解開此密文，請確認是否為同一個 Google 帳號。`);
+         throw fe;
+       }
+    } else {
+       logFn?.(`🔥 無可用的救援金鑰，解密中斷。`);
+       throw e;
+    }
   }
 }
 
@@ -174,7 +190,7 @@ export async function writeDriveDB(
   uid: string,
   logFn?: (msg: string) => void
 ): Promise<void> {
-  logFn?.(`🚀 正在加密並寫入雲端... (ID: ${fileId})`);
+  logFn?.(`🚀 加密並寫入雲端...`);
   const encrypted = await encryptDB({ ...db, lastModified: Date.now() }, uid);
   const res = await fetch(`${UPLOAD_API}/files/${fileId}?uploadType=media`, {
     method: "PATCH",

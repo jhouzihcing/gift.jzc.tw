@@ -1,9 +1,9 @@
 /**
- * useDriveSync — v2.19.0 同步診斷版 (Diagnostic Edition)
+ * useDriveSync — v2.21.0 帳號自動校準版 (Autoconverge Edition)
  *
  * 設計原則：
- * 1. 深度日誌化：記錄每一個網路與加解密細節，供使用者截圖偵錯。
- * 2. 多重備索：當常規搜尋失敗時，報告空間內的所有檔案狀態。
+ * 1. 雙金鑰救援：優先使用穩定 UID，失敗時自動使用 Email 救援。
+ * 2. 登入即對齊：只要 Google 帳號相同，兩台設備應能達成 100% 同步成功率。
  */
 
 import { useEffect, useRef, useCallback } from "react";
@@ -15,11 +15,12 @@ import {
   writeDriveDB,
   cleanupTrash,
 } from "@/lib/driveFile";
+import { getKeyHash } from "@/lib/crypto";
 
 const MAX_BACKOFF_MS = 60_000;
 
 export function useDriveSync() {
-  const { user, setSyncStatus, setSyncError } = useAuthStore();
+  const { user, setSyncStatus, setSyncError, syncOverrideUid } = useAuthStore();
   const {
     cards: storeCards,
     setCards,
@@ -41,17 +42,21 @@ export function useDriveSync() {
   const retryTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const workerBusyRef  = useRef(false);
 
+  // v2.21.0: 優先順序：手動覆寫 > 系統穩定 UID > 
+  const effectiveUid = syncOverrideUid || user?.uid;
+  // 救援金鑰通常為 Email，因為帳號相同則 Email 必同
+  const fallbackUid = user?.email || undefined;
+
   // 雙發寫入 (Double-Write)
   const processQueue = useCallback(async () => {
     if (workerBusyRef.current || syncQueue.length === 0) return;
-    if (!hiddenIdRef.current || !user?.driveToken || !user?.uid) return;
+    if (!hiddenIdRef.current || !user?.driveToken || !effectiveUid) return;
 
     workerBusyRef.current = true;
     setGlobalSyncing(true);
     setSyncStatus(true, useAuthStore.getState().lastSync);
 
     const batchIds = [...syncQueue];
-    const batchCards = storeCards.filter(c => batchIds.includes(c.id));
     
     try {
       const currentDB = {
@@ -61,15 +66,13 @@ export function useDriveSync() {
         customMerchants: useCardStore.getState().customMerchants,
       };
 
-      addSyncLog(`🔼 正在執行雲端更新 (批次大小: ${batchIds.length})`);
+      addSyncLog(`🔼 執行寫入 (主金鑰: ${syncOverrideUid ? "手動貼上" : "Google 穩定 ID"})`);
       
-      // ⚡ 優先寫入隱藏空間 (Primary Source)
-      await writeDriveDB(user.driveToken, hiddenIdRef.current, currentDB, user.uid, addSyncLog);
+      await writeDriveDB(user.driveToken, hiddenIdRef.current, currentDB, effectiveUid, addSyncLog);
       
-      // ⚡ 背景寫入顯性空間 (Mirror Backup)
       if (visibleIdRef.current) {
-        writeDriveDB(user.driveToken, visibleIdRef.current, currentDB, user.uid).catch(e => {
-          console.warn("[Sync] 顯性鏡像寫入失敗 (非致命):", e.message);
+        writeDriveDB(user.driveToken, visibleIdRef.current, currentDB, effectiveUid).catch(e => {
+          console.warn("[Sync] 鏡像覆蓋跳過:", e.message);
         });
       }
 
@@ -79,10 +82,10 @@ export function useDriveSync() {
       setSyncStatus(false, Date.now());
       setSyncError(false);
       retryCountRef.current = 0;
-      addSyncLog(`✅ 同步任務圓滿完成。`);
+      addSyncLog(`✅ 同步完成。`);
 
     } catch (e: any) {
-      addSyncLog(`❌ 同步過程中斷: ${e.message || e}`);
+      addSyncLog(`❌ 寫入失敗: ${e.message || e}`);
       setSyncStatus(false, useAuthStore.getState().lastSync);
       setSyncError(true);
 
@@ -101,48 +104,48 @@ export function useDriveSync() {
         setTimeout(() => processQueue(), 100);
       }
     }
-  }, [user?.driveToken, user?.uid, syncQueue, storeCards, setGlobalSyncing, removeFromQueue, markCardSynced, setSyncStatus, setSyncError, addSyncLog]);
+  }, [user?.driveToken, effectiveUid, syncQueue, storeCards, syncOverrideUid, setGlobalSyncing, removeFromQueue, markCardSynced, setSyncStatus, setSyncError, addSyncLog]);
 
-  // ─── 初始化邏輯 (AppData 優先 + 顯性遷移 + 完整日誌) ──────────────────────────
+  // ─── 初始化邏輯 (階層式對齊版) ──────────────────────────
   useEffect(() => {
-    if (!user?.driveToken) return;
+    if (!user?.driveToken || !effectiveUid) return;
 
     const init = async () => {
       setSyncStatus(true, null);
-      addSyncLog(`🏁 啟動 v2.19.0 初始化校對儀 (UID: ${user.uid?.slice(0, 8)}...)`);
       
+      const kh = await getKeyHash(effectiveUid);
+      addSyncLog(`🛡️ 當前角色金鑰指紋: [${kh}]`);
+      if (fallbackUid) addSyncLog(`🩹 已備妥 Email 救援金鑰模式。`);
+
       try {
         await (useCardStore.persist as any).rehydrate();
         
-        // 1. 同時獲取兩個空間的 ID
-        addSyncLog(`📡 正在偵測雲端連結狀態...`);
+        addSyncLog(`📡 正在與雲端建立連線...`);
         const [hid, vid] = await Promise.all([
-          getOrCreateDriveFile(user.driveToken!, user.uid, 'appDataFolder', addSyncLog),
-          getOrCreateDriveFile(user.driveToken!, user.uid, 'drive', addSyncLog)
+          getOrCreateDriveFile(user.driveToken!, effectiveUid, 'appDataFolder', addSyncLog),
+          getOrCreateDriveFile(user.driveToken!, effectiveUid, 'drive', addSyncLog)
         ]);
         
         hiddenIdRef.current = hid;
         visibleIdRef.current = vid;
         setCloudFileIds({ visible: vid, hidden: hid });
 
-        // 2. 獲取主空間資料 (HIDDEN)
-        addSyncLog(`💾 正在加載隱藏空間數據資料庫...`);
-        let primarySource = await readDriveDB(user.driveToken!, hid, user.uid, addSyncLog);
+        addSyncLog(`📥 正在拉取數據庫...`);
+        // v2.21.0: 傳入 fallbackUid 實現自動校準
+        let primarySource = await readDriveDB(user.driveToken!, hid, effectiveUid, addSyncLog, fallbackUid);
         
-        // 🚀 遷移邏輯：如果 AppData 是空的（剛轉移版本），但顯性空間有資料，則執行遷移
+        // 遷移邏輯
         if (primarySource.db.cards.length === 0) {
-          addSyncLog(`☁️ 隱藏空間為空，正在檢查是否有顯性資料可遷移...`);
+          addSyncLog(`☁️ AppData 無資料，檢查顯性空間...`);
           try {
-            const legacySource = await readDriveDB(user.driveToken!, vid, user.uid, addSyncLog);
+            const legacySource = await readDriveDB(user.driveToken!, vid, effectiveUid, addSyncLog, fallbackUid);
             if (legacySource.db.cards.length > 0) {
-              addSyncLog(`🔄 發現 ${legacySource.db.cards.length} 張舊卡片，自動執行一鍵遷移！`);
+              addSyncLog(`🔄 發現可用資料，執行自動遷移對齊。`);
               primarySource = legacySource;
-              await writeDriveDB(user.driveToken!, hid, primarySource.db, user.uid, addSyncLog);
-            } else {
-              addSyncLog(`ℹ️ 雲端並無舊資料庫。`);
+              await writeDriveDB(user.driveToken!, hid, primarySource.db, effectiveUid, addSyncLog);
             }
           } catch (e) {
-            addSyncLog(`⚠️ 顯性搜尋略過 (可能權限不足)`);
+            addSyncLog(`⚠️ 無法從顯性空間找回資料。`);
           }
         }
 
@@ -159,12 +162,11 @@ export function useDriveSync() {
         }
 
         if (changed) {
-          addSyncLog(`🧹 正在執行過期卡片清理...`);
-          await writeDriveDB(user.driveToken!, hid, cleanedDb, user.uid);
+          await writeDriveDB(user.driveToken!, hid, cleanedDb, effectiveUid, addSyncLog);
         }
 
         setSyncStatus(false, Date.now());
-        addSyncLog(`🏁 初始化校對圓滿成功。`);
+        addSyncLog(`🏁 帳號校準成功，同步已就緒。`);
       } catch (err: any) {
         addSyncLog(`🔥 初始化失敗: ${err.message || err}`);
         setSyncStatus(false, null);
@@ -175,7 +177,7 @@ export function useDriveSync() {
     };
 
     init();
-  }, [user?.driveToken]);
+  }, [user?.driveToken, effectiveUid, syncOverrideUid, fallbackUid]);
 
   useEffect(() => {
     if (isInitialized && hiddenIdRef.current && syncQueue.length > 0) {

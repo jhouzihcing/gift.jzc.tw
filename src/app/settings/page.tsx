@@ -8,14 +8,19 @@ import { signOut } from "next-auth/react";
 import { 
   ChevronLeft, LogOut, Trash2, Plus, Store, RotateCcw, 
   RefreshCw, ShieldCheck, ChevronRight, Code, Database, 
-  CloudDownload, AlertCircle, EyeOff, Terminal, Info
+  CloudDownload, AlertCircle, EyeOff, Terminal, Info, Key,
+  XCircle, CheckCircle2
 } from "lucide-react";
 import { VERSION } from "@/constants/version";
 import { readDriveDB, getOrCreateDriveFile } from "@/lib/driveFile";
+import { getKeyHash } from "@/lib/crypto";
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { user, isSyncing, lastSync, setSyncStatus, setSyncError } = useAuthStore();
+  const { 
+    user, isSyncing, lastSync, setSyncStatus, setSyncError, 
+    syncOverrideUid, setSyncOverrideUid 
+  } = useAuthStore();
   const { 
     cards, cloudFileIds, customMerchants, addCustomMerchant,
     restoreFromTrash, deletePermanently, setCards, setCloudFileIds,
@@ -25,6 +30,10 @@ export default function SettingsPage() {
   const [newMerchant, setNewMerchant] = useState("");
   const [isOverwriting, setIsOverwriting] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
+  const [showKeyTool, setShowKeyTool] = useState(false);
+  const [manualUid, setManualUid] = useState("");
+  const [currentKeyHash, setCurrentKeyHash] = useState("計算中...");
+  
   const logEndRef = useRef<HTMLDivElement>(null);
 
   const trashCards = cards.filter(c => c.deletedAt !== null);
@@ -35,6 +44,17 @@ export default function SettingsPage() {
       logEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
   }, [syncLogs, showLogs]);
+
+  useEffect(() => {
+    const fetchHash = async () => {
+      const uid = syncOverrideUid || user?.uid;
+      if (uid) {
+        const hash = await getKeyHash(uid);
+        setCurrentKeyHash(hash);
+      }
+    };
+    fetchHash();
+  }, [syncOverrideUid, user?.uid]);
 
   const merchantStats = useMemo(() => {
     const stats: Record<string, number> = {};
@@ -59,13 +79,27 @@ export default function SettingsPage() {
     setNewMerchant("");
   };
 
+  const handleApplyManualUid = () => {
+    if (!manualUid.trim()) return;
+    setSyncOverrideUid(manualUid.trim());
+    setManualUid("");
+    alert("🔐 已套用自訂金鑰！系統將重新載入雲端資料。");
+    window.location.reload();
+  };
+
+  const clearManualUid = () => {
+    setSyncOverrideUid(null);
+    alert("🔄 已恢復使用系統預設金鑰。");
+    window.location.reload();
+  };
+
   const handleLogout = async () => {
     await signOut({ callbackUrl: "/" });
   };
 
-  // v2.19.0: 強制同步校對 (AppData 優先 + 詳細日誌)
   const handleForceCloudRestore = async () => {
-    if (!user?.driveToken || !user?.uid) return;
+    const uid = syncOverrideUid || user?.uid;
+    if (!user?.driveToken || !uid) return;
     if (!confirm("⚠️ 這將強制優先從隱藏空間抓取資料，並覆蓋現有的手機資料，確定執行？")) return;
 
     setIsOverwriting(true);
@@ -75,17 +109,17 @@ export default function SettingsPage() {
 
     try {
       addSyncLog("🔍 開始全域 ID 重新偵測...");
-      const hid = await getOrCreateDriveFile(user.driveToken, user.uid, 'appDataFolder', addSyncLog);
-      const vid = await getOrCreateDriveFile(user.driveToken, user.uid, 'drive', addSyncLog);
+      const hid = await getOrCreateDriveFile(user.driveToken, uid, 'appDataFolder', addSyncLog);
+      const vid = await getOrCreateDriveFile(user.driveToken, uid, 'drive', addSyncLog);
       setCloudFileIds({ visible: vid, hidden: hid });
 
       addSyncLog("📥 正在強行讀取 AppData 資料庫...");
-      let primarySource = await readDriveDB(user.driveToken, hid, user.uid, addSyncLog);
+      let primarySource = await readDriveDB(user.driveToken, hid, uid, addSyncLog);
       
       if (primarySource.db.cards.length === 0) {
          addSyncLog("ℹ️ AppData 無資料，嘗試轉向顯性空間備援...");
          try {
-           const legacy = await readDriveDB(user.driveToken, vid, user.uid, addSyncLog);
+           const legacy = await readDriveDB(user.driveToken, vid, uid, addSyncLog);
            if (legacy.db.cards.length > 0) primarySource = legacy;
          } catch (e) {
            addSyncLog("⚠️ 顯性空間讀取失敗。");
@@ -156,13 +190,13 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* 同步穩定性診斷 (v2.19.0 同步日誌版) */}
+        {/* 同步日誌與金鑰診斷 (v2.20.0 Key Harmony) */}
         <section className="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col gap-5 relative overflow-hidden">
            <div className="flex justify-between items-start z-10">
               <div className="space-y-1">
-                 <h3 className="text-[10px] font-black text-[#34DA4F] uppercase tracking-[0.2em]">Diagnostic Console</h3>
+                 <h3 className="text-[10px] font-black text-[#34DA4F] uppercase tracking-[0.2em]">Sync Diagnostic Engine</h3>
                  <div className="flex items-center gap-2">
-                    <p className="text-xl font-black text-slate-800">同步執行偵測日誌</p>
+                    <p className="text-xl font-black text-slate-800">執行日誌與金鑰校對</p>
                  </div>
               </div>
               <div className="flex gap-2">
@@ -171,6 +205,12 @@ export default function SettingsPage() {
                   className={`p-3 rounded-2xl border shadow-sm flex items-center justify-center transition-all ${showLogs ? 'bg-slate-900 text-white border-slate-900' : 'bg-slate-50 text-slate-400 border-slate-100'}`}
                 >
                   <Terminal size={20} />
+                </button>
+                 <button 
+                  onClick={() => setShowKeyTool(!showKeyTool)}
+                  className={`p-3 rounded-2xl border shadow-sm flex items-center justify-center transition-all ${showKeyTool ? 'bg-[#34DA4F] text-white border-[#34DA4F]' : 'bg-slate-50 text-slate-400 border-slate-100'}`}
+                >
+                  <Key size={20} />
                 </button>
                  <button 
                   onClick={handleForceCloudRestore}
@@ -182,12 +222,55 @@ export default function SettingsPage() {
               </div>
            </div>
 
+           {/* 金鑰校對工具 */}
+           {showKeyTool && (
+             <div className="bg-[#34DA4F]/5 rounded-2xl p-5 border border-[#34DA4F]/10 flex flex-col gap-4">
+                <div className="flex justify-between items-center mb-1">
+                   <div className="flex items-center gap-2">
+                      <ShieldCheck size={16} className="text-[#34DA4F]" />
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Key Hash Fingerprint</span>
+                   </div>
+                   <span className="font-mono text-xs font-black text-[#34DA4F] bg-white px-3 py-1 rounded-full border border-[#34DA4F]/20">[{currentKeyHash}]</span>
+                </div>
+                
+                <p className="text-[10px] text-slate-400 font-bold leading-relaxed px-1">
+                   若兩台手機的 [Key Hash] 不同，則無法互通讀取。請複製原設備的 UID 並在下方貼上套用。
+                </p>
+
+                <div className="relative group">
+                   <input 
+                      type="text"
+                      placeholder="貼上原設備的 UID..."
+                      value={manualUid}
+                      onChange={(e) => setManualUid(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-[10px] font-mono outline-none focus:border-[#34DA4F] transition-all pr-20"
+                   />
+                   <button 
+                      onClick={handleApplyManualUid}
+                      className="absolute right-2 top-2 bottom-2 bg-slate-800 text-white px-3 rounded-lg text-[10px] font-black flex items-center gap-1 active:scale-95 transition-all"
+                   >
+                     套用
+                   </button>
+                </div>
+
+                {syncOverrideUid && (
+                   <div className="flex justify-between items-center bg-white p-3 rounded-xl border border-red-100">
+                      <div className="flex items-center gap-2">
+                         <AlertCircle size={14} className="text-red-500" />
+                         <span className="text-[10px] font-black text-red-500 tracking-tight">正使用手動覆蓋金鑰運作中</span>
+                      </div>
+                      <button onClick={clearManualUid} className="text-[10px] font-black text-slate-400 underline underline-offset-2">清除</button>
+                   </div>
+                )}
+             </div>
+           )}
+
            {/* 日誌主控台 */}
            {showLogs && (
              <div className="bg-slate-900 rounded-2xl p-4 font-mono text-[10px] leading-relaxed max-h-[300px] overflow-y-auto custom-scrollbar border border-slate-800 shadow-inner">
                 <div className="flex items-center gap-2 text-[#34DA4F] mb-3 pb-2 border-b border-white/10 opacity-80">
                    <div className="w-2 h-2 rounded-full bg-[#34DA4F] animate-pulse" />
-                   <span className="font-black uppercase tracking-widest">Real-time Sync Log</span>
+                   <span className="font-black uppercase tracking-widest">Diagnostic Console</span>
                 </div>
                 {syncLogs.length === 0 ? (
                    <p className="text-slate-500 italic">尚未產生診斷日誌...</p>
@@ -206,20 +289,13 @@ export default function SettingsPage() {
            
            <div className="space-y-3 pt-2 border-t border-slate-50 relative z-10 text-[10px] font-bold">
               <div className="flex justify-between items-center text-slate-400">
-                <span className="flex items-center gap-1.5"><EyeOff size={12} className="text-[#34DA4F]" /> HIDDEN ID</span>
-                <span onClick={() => cloudFileIds.hidden && copyToClipboard(cloudFileIds.hidden)} className="font-mono cursor-pointer truncate max-w-[140px] text-slate-300 hover:text-slate-500">{cloudFileIds.hidden || "對齊中..."}</span>
+                <span className="flex items-center gap-1.5"><EyeOff size={12} className="text-[#34DA4F]" /> DEVICE UID (COPY)</span>
+                <span onClick={() => user?.uid && copyToClipboard(user.uid)} className="font-mono cursor-pointer truncate max-w-[140px] text-slate-300 hover:text-slate-500 underline underline-offset-4 decoration-slate-100">{user?.uid ? `${user.uid.slice(0, 8)}...` : "讀取中..."}</span>
               </div>
               <div className="flex justify-between items-center text-slate-400">
-                <span className="flex items-center gap-1.5"><Code size={12} /> DEVICE UID</span>
-                <span className="font-mono text-slate-200">{user?.uid ? `${user.uid.slice(0, 6)}...${user.uid.slice(-4)}` : "連結中..."}</span>
+                <span className="flex items-center gap-1.5"><Database size={12} /> CLOUD HIDDEN ID</span>
+                <span className="font-mono text-slate-200 truncate max-w-[140px]">{cloudFileIds.hidden || "連結中..."}</span>
               </div>
-           </div>
-
-           <div className="flex items-start gap-2 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-              <Info size={16} className="text-[#34DA4F] shrink-0 mt-0.5" />
-              <p className="text-[10px] text-slate-400 font-bold leading-normal italic">
-                如果您無法同步，請展開終端機圖示將執行日誌截圖傳給開發團隊，我們能精準鎖定加密金鑰或雲端搜尋是否異常。
-              </p>
            </div>
         </section>
 

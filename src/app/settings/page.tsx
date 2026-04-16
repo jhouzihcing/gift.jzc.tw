@@ -7,35 +7,28 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { signOut } from "next-auth/react";
 import { 
   ChevronLeft, LogOut, Trash2, Plus, Store, RotateCcw, 
-  RefreshCw, ShieldCheck, ChevronRight, Code, Database, 
-  CloudDownload, AlertCircle, EyeOff, Terminal, Info, Key,
-  CheckCircle2, Settings2
+  RefreshCw, ShieldCheck, ChevronRight, CheckCircle2, 
+  Settings2, Terminal
 } from "lucide-react";
 import { VERSION } from "@/constants/version";
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { 
-    user, isSyncing, lastSync, setSyncStatus, setSyncError, 
-    syncOverrideUid, setSyncOverrideUid 
-  } = useAuthStore();
-  const { 
-    cards, cloudFileIds, customMerchants, addCustomMerchant,
-    restoreFromTrash, deletePermanently, syncLogs
-  } = useCardStore();
+  const { user } = useAuthStore();
+  const { cards, customMerchants, addCustomMerchant, restoreFromTrash, deletePermanently, syncLogs } = useCardStore();
   
   const [newMerchant, setNewMerchant] = useState("");
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showLogs, setShowLogs] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
 
   const trashCards = cards.filter(c => c.deletedAt !== null);
   const activeCards = cards.filter(c => c.deletedAt === null);
 
   useEffect(() => {
-    if (showAdvanced) {
+    if (showLogs) {
       logEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-  }, [syncLogs, showAdvanced]);
+  }, [syncLogs, showLogs]);
 
   const merchantStats = useMemo(() => {
     const stats: Record<string, number> = {};
@@ -78,7 +71,7 @@ export default function SettingsPage() {
 
       <main className="p-4 flex flex-col gap-6">
         
-        {/* 會員卡片與資產總覽 */}
+        {/* 會員身分卡片 */}
         <section className="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col gap-5 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-[#34DA4F]/5 rounded-full blur-2xl -mr-8 -mt-8" />
           <div className="flex items-center gap-4 relative z-10">
@@ -105,64 +98,53 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* 同步狀態 (v2.22.0 極簡化帳號對齊版) */}
+        {/* 雲端同步狀態 (v2.23.0 極簡化) */}
         <section className="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col gap-5 relative overflow-hidden">
            <div className="flex justify-between items-center z-10">
               <div className="space-y-1">
-                 <h3 className="text-[10px] font-black text-[#34DA4F] uppercase tracking-[0.2em]">Cloud Sync Status</h3>
+                 <h3 className="text-[10px] font-black text-[#34DA4F] uppercase tracking-[0.2em]">Synchronization</h3>
                  <div className="flex items-center gap-2">
-                    <p className="text-xl font-black text-slate-800">Google 帳號同步</p>
+                    <p className="text-xl font-black text-slate-800">帳號自動同步</p>
                  </div>
               </div>
               <div className="flex gap-2">
                  <div className="px-3 py-1.5 bg-[#34DA4F]/10 text-[#34DA4F] rounded-full border border-[#34DA4F]/10 flex items-center gap-1.5">
                     <CheckCircle2 size={14} />
-                    <span className="text-[10px] font-black uppercase tracking-widest">已自動對齊</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest">正常運作</span>
                  </div>
                  <button 
-                  onClick={() => setShowAdvanced(!showAdvanced)}
+                  onClick={() => setShowLogs(!showLogs)}
                   className="p-3 bg-slate-50 text-slate-400 rounded-2xl border border-slate-100 active:scale-95 transition-all"
                 >
-                  <Settings2 size={18} />
+                  <Terminal size={18} />
                 </button>
               </div>
            </div>
 
-           {/* 隱藏的進階診斷資訊 */}
-           {showAdvanced && (
-             <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                <div className="bg-slate-900 rounded-2xl p-4 font-mono text-[10px] leading-relaxed max-h-[200px] overflow-y-auto custom-scrollbar">
-                   {syncLogs.length === 0 ? (
-                      <p className="text-slate-500 italic">偵測中...</p>
-                   ) : (
-                      syncLogs.map((log, i) => (
-                        <p key={i} className={log.includes("❌") || log.includes("🔥") ? "text-red-400" : log.includes("✅") ? "text-[#34DA4F]" : "text-slate-300"}>
-                          {log}
-                        </p>
-                      ))
-                   )}
-                   <div ref={logEndRef} />
-                </div>
-                <div className="p-3 bg-red-50 rounded-xl border border-red-100 flex items-center justify-between">
-                   <span className="text-[10px] font-black text-red-400 uppercase tracking-widest">手動金鑰狀態</span>
-                   <button 
-                    onClick={() => { setSyncOverrideUid(null); window.location.reload(); }}
-                    className="text-[10px] font-black text-red-500 underline"
-                   >
-                     恢復預設
-                   </button>
-                </div>
+           {showLogs && (
+             <div className="bg-slate-900 rounded-2xl p-4 font-mono text-[10px] leading-relaxed max-h-[160px] overflow-y-auto custom-scrollbar animate-in fade-in slide-in-from-top-1 duration-200">
+                {syncLogs.length === 0 ? (
+                   <p className="text-slate-500 italic">連線中...</p>
+                ) : (
+                   syncLogs.map((log, i) => (
+                    <p key={i} className={log.includes("❌") || log.includes("🔥") ? "text-red-400" : log.includes("✅") ? "text-[#34DA4F]" : "text-slate-400"}>
+                      {log}
+                    </p>
+                   ))
+                )}
+                <div ref={logEndRef} />
              </div>
            )}
 
            <div className="flex items-start gap-2 bg-slate-50 p-4 rounded-2xl border border-slate-100">
               <ShieldCheck size={16} className="text-[#34DA4F] shrink-0 mt-0.5" />
               <p className="text-[10px] text-slate-400 font-bold leading-normal italic">
-                系統已自動鎖定您的 Google 帳號金鑰，跨裝置同步將無需手動對齊，登入即用。
+                系統已結合 Google 帳號安全功能，所有資料在雲端均經過加密處理。只要登入同一個 Email，所有設備即可自動同步。
               </p>
            </div>
         </section>
 
+        {/* 商家管理 */}
         <section>
           <h3 className="text-xs font-black text-slate-400 mb-3 px-2 flex items-center gap-2 uppercase tracking-widest leading-none">
             <Store size={14} /> 商家餘額與管理
@@ -201,13 +183,14 @@ export default function SettingsPage() {
           </div>
         </section>
 
+        {/* 資源回收桶 */}
         <section>
           <h3 className="text-xs font-black text-slate-400 mb-3 px-2 flex items-center gap-2 uppercase tracking-widest">
             <Trash2 size={14} /> 已廢棄卡片
           </h3>
           <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col gap-4">
             {trashCards.length === 0 ? (
-              <p className="text-slate-300 text-xs font-bold text-center py-4 uppercase tracking-widest leading-loose">資料清理中</p>
+              <p className="text-slate-300 text-xs font-bold text-center py-4 uppercase tracking-widest leading-loose">回收桶空空如也</p>
             ) : (
               <div className="flex flex-col gap-3">
                 {trashCards.map(card => (
@@ -217,8 +200,8 @@ export default function SettingsPage() {
                       <p className="text-[10px] text-slate-300 font-bold mt-1 truncate">{card.barcode}</p>
                     </div>
                     <div className="flex gap-2">
-                      <button onClick={() => {}} className="p-2.5 bg-white rounded-xl text-slate-400 border border-slate-100"><RotateCcw size={16} /></button>
-                      <button onClick={() => {}} className="p-2.5 bg-red-50 text-red-500 rounded-xl border border-red-100"><Trash2 size={16} /></button>
+                      <button onClick={() => restoreFromTrash(card.id)} className="p-2.5 bg-white rounded-xl text-slate-400 border border-slate-100 active:scale-90 transition-all"><RotateCcw size={16} /></button>
+                      <button onClick={() => deletePermanently(card.id)} className="p-2.5 bg-red-50 text-red-500 rounded-xl border border-red-100 active:scale-90 transition-all"><Trash2 size={16} /></button>
                     </div>
                   </div>
                 ))}

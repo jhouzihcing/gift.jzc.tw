@@ -1,9 +1,9 @@
 /**
- * 用戶端 AES-256-GCM 加密工具 (v2.20.0 強韌版)
+ * 用戶端 AES-256-GCM 加密工具 (v2.23.0 Email 核心版)
  * ─────────────────────────────────────────────
- * 優化：
- * 1. 增加 getKeyHash 用於跨裝置手動校驗金鑰一致性。
- * 2. 強化 Base64 轉換，避免在大數據下發生堆疊溢位或編碼偏移。
+ * 變更：
+ * 統一使用使用者 Google Email 作為金鑰種子，捨棄不穩定的動態 UID。
+ * 達成「Google 帳號相同 = 金鑰相同」的極簡化同步目標。
  */
 
 import type { DriveDB } from "./driveFile";
@@ -22,21 +22,21 @@ function hexToUint8(hex: string): Uint8Array {
 /**
  * 取得當前金鑰的校驗碼 (Hash)
  */
-export async function getKeyHash(uid: string): Promise<string> {
+export async function getKeyHash(seed: string): Promise<string> {
   const encoder = new TextEncoder();
-  const hashBuffer = await crypto.subtle.digest("SHA-256", encoder.encode(uid));
+  const hashBuffer = await crypto.subtle.digest("SHA-256", encoder.encode(seed));
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 12);
 }
 
 /**
- * 從使用者 UID 衍生 AES-GCM CryptoKey
+ * 從種子 (Email) 衍生 AES-GCM CryptoKey
  */
-async function deriveKey(uid: string): Promise<CryptoKey> {
+async function deriveKey(seed: string): Promise<CryptoKey> {
   const encoder = new TextEncoder();
   const keyMaterial = await crypto.subtle.importKey(
     "raw",
-    encoder.encode(uid),
+    encoder.encode(seed),
     "PBKDF2",
     false,
     ["deriveKey"]
@@ -56,9 +56,6 @@ async function deriveKey(uid: string): Promise<CryptoKey> {
   );
 }
 
-/**
- * 穩定版 Uint8Array 轉 Base64
- */
 function uint8ToBase64(arr: Uint8Array): string {
   let binary = "";
   for (let i = 0; i < arr.byteLength; i++) {
@@ -67,9 +64,6 @@ function uint8ToBase64(arr: Uint8Array): string {
   return btoa(binary);
 }
 
-/**
- * 穩定版 Base64 轉 Uint8Array
- */
 function base64ToUint8(b64: string): Uint8Array {
   const binary = atob(b64);
   const arr = new Uint8Array(binary.length);
@@ -80,10 +74,10 @@ function base64ToUint8(b64: string): Uint8Array {
 }
 
 /**
- * 將 DriveDB 加密成 Base64 字串後上傳至 Drive
+ * 加密 DriveDB
  */
-export async function encryptDB(db: DriveDB, uid: string): Promise<string> {
-  const key = await deriveKey(uid);
+export async function encryptDB(db: DriveDB, keySeed: string): Promise<string> {
+  const key = await deriveKey(keySeed);
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const plaintext = new TextEncoder().encode(JSON.stringify(db));
 
@@ -100,15 +94,15 @@ export async function encryptDB(db: DriveDB, uid: string): Promise<string> {
 }
 
 /**
- * 將從 Drive 讀回的密文解密成 DriveDB
+ * 解密 DriveDB
  */
-export async function decryptDB(ciphertext: string, uid: string): Promise<DriveDB> {
+export async function decryptDB(ciphertext: string, keySeed: string): Promise<DriveDB> {
   const [ivB64, cipherB64] = ciphertext.split(".");
   if (!ivB64 || !cipherB64) {
-    throw new Error("格式錯誤：密文結構不完整");
+    throw new Error("格式錯誤");
   }
 
-  const key = await deriveKey(uid);
+  const key = await deriveKey(keySeed);
   const iv = base64ToUint8(ivB64);
   const cipherBuf = base64ToUint8(cipherB64);
 
@@ -122,10 +116,10 @@ export async function decryptDB(ciphertext: string, uid: string): Promise<DriveD
 }
 
 /**
- * 本地 Storage 加密
+ * 本地加密
  */
-export async function encryptText(text: string, uid: string): Promise<string> {
-  const key = await deriveKey(uid);
+export async function encryptText(text: string, keySeed: string): Promise<string> {
+  const key = await deriveKey(keySeed);
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const plaintext = new TextEncoder().encode(text);
 
@@ -139,13 +133,13 @@ export async function encryptText(text: string, uid: string): Promise<string> {
 }
 
 /**
- * 本地 Storage 解密
+ * 本地解密
  */
-export async function decryptText(encrypted: string, uid: string): Promise<string> {
+export async function decryptText(encrypted: string, keySeed: string): Promise<string> {
   const [ivB64, cipherB64] = encrypted.split(".");
   if (!ivB64 || !cipherB64) throw new Error("Format invalid");
 
-  const key = await deriveKey(uid);
+  const key = await deriveKey(keySeed);
   const iv = base64ToUint8(ivB64);
   const cipherBuf = base64ToUint8(cipherB64);
 

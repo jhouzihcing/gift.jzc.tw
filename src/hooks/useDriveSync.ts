@@ -1,9 +1,9 @@
 /**
- * useDriveSync — v2.22.0 帳號修復版 (Identity Healing)
+ * useDriveSync — v2.23.0 極簡版 (Sync Revamp)
  *
- * 設計原則：
- * 1. 自動金鑰修復：若 Email 救援成功，自動用穩定 ID 覆寫雲端，達成永久對齊。
- * 2. 靜默對齊：主打「登入即同步」，無需使用者介入。
+ * 核心原則：
+ * 1. 回歸純粹：僅使用 Email 作為同步金鑰，實現帳號即金鑰。
+ * 2. 自動過渡：背景自動將舊版 UID 資料轉換為新版 Email 格式。
  */
 
 import { useEffect, useRef, useCallback } from "react";
@@ -15,12 +15,11 @@ import {
   writeDriveDB,
   cleanupTrash,
 } from "@/lib/driveFile";
-import { getKeyHash } from "@/lib/crypto";
 
 const MAX_BACKOFF_MS = 60_000;
 
 export function useDriveSync() {
-  const { user, setSyncStatus, setSyncError, syncOverrideUid } = useAuthStore();
+  const { user, setSyncStatus, setSyncError } = useAuthStore();
   const {
     cards: storeCards,
     setCards,
@@ -42,14 +41,14 @@ export function useDriveSync() {
   const retryTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const workerBusyRef  = useRef(false);
 
-  // 優先順序：手動 > 核心 UID
-  const effectiveUid = syncOverrideUid || user?.uid;
-  const fallbackUid = user?.email || undefined;
+  // v2.23.0 標準：唯一金鑰種子即是 Email
+  const primaryEmail = user?.email;
+  const legacyUid = user?.uid;
 
-  // 雙發寫入 (Double-Write)
+  // 雙發寫入
   const processQueue = useCallback(async () => {
     if (workerBusyRef.current || syncQueue.length === 0) return;
-    if (!hiddenIdRef.current || !user?.driveToken || !effectiveUid) return;
+    if (!hiddenIdRef.current || !user?.driveToken || !primaryEmail) return;
 
     workerBusyRef.current = true;
     setGlobalSyncing(true);
@@ -65,10 +64,10 @@ export function useDriveSync() {
         customMerchants: useCardStore.getState().customMerchants,
       };
 
-      await writeDriveDB(user.driveToken, hiddenIdRef.current, currentDB, effectiveUid, addSyncLog);
+      await writeDriveDB(user.driveToken, hiddenIdRef.current, currentDB, primaryEmail, addSyncLog);
       
       if (visibleIdRef.current) {
-        writeDriveDB(user.driveToken, visibleIdRef.current, currentDB, effectiveUid).catch(() => {});
+        writeDriveDB(user.driveToken, visibleIdRef.current, currentDB, primaryEmail).catch(() => {});
       }
 
       removeFromQueue(batchIds);
@@ -77,10 +76,10 @@ export function useDriveSync() {
       setSyncStatus(false, Date.now());
       setSyncError(false);
       retryCountRef.current = 0;
-      addSyncLog(`✅ 同步成功。`);
+      addSyncLog(`✅ 已同步。`);
 
     } catch (e: any) {
-      addSyncLog(`❌ 寫入失敗: ${e.message || e}`);
+      addSyncLog(`❌ 同步失敗: ${e.message || e}`);
       setSyncStatus(false, useAuthStore.getState().lastSync);
       setSyncError(true);
 
@@ -99,56 +98,53 @@ export function useDriveSync() {
         setTimeout(() => processQueue(), 100);
       }
     }
-  }, [user?.driveToken, effectiveUid, syncQueue, storeCards, setGlobalSyncing, removeFromQueue, markCardSynced, setSyncStatus, setSyncError, addSyncLog]);
+  }, [user?.driveToken, primaryEmail, syncQueue, storeCards, setGlobalSyncing, removeFromQueue, markCardSynced, setSyncStatus, setSyncError, addSyncLog]);
 
-  // ─── 初始化邏輯 (金鑰修復版) ──────────────────────────
+  // ─── 初始化邏輯 (極簡遷移版) ──────────────────────────
   useEffect(() => {
-    if (!user?.driveToken || !effectiveUid) return;
+    if (!user?.driveToken || !primaryEmail) return;
 
     const init = async () => {
       setSyncStatus(true, null);
       
-      const kh = await getKeyHash(effectiveUid);
-      addSyncLog(`🛡️ 帳號已鎖定: [${kh}]`);
-
       try {
         await (useCardStore.persist as any).rehydrate();
         
+        // 1. 建立連結
         const [hid, vid] = await Promise.all([
-          getOrCreateDriveFile(user.driveToken!, effectiveUid, 'appDataFolder', (m) => addSyncLog(m)),
-          getOrCreateDriveFile(user.driveToken!, effectiveUid, 'drive', (m) => addSyncLog(m))
+          getOrCreateDriveFile(user.driveToken!, primaryEmail, 'appDataFolder', addSyncLog),
+          getOrCreateDriveFile(user.driveToken!, primaryEmail, 'drive', addSyncLog)
         ]);
         
         hiddenIdRef.current = hid;
         visibleIdRef.current = vid;
         setCloudFileIds({ visible: vid, hidden: hid });
 
-        // v2.22.0: 讀取並偵測是否使用了救援金鑰
-        const { db: cloudDb, usedFallback } = await readDriveDB(user.driveToken!, hid, effectiveUid, (m) => addSyncLog(m), fallbackUid);
-        let primarySourceDb = cloudDb;
+        // 2. 數據對齊
+        const { db: cloudDb, keyMigrated } = await readDriveDB(user.driveToken!, hid, primaryEmail, addSyncLog, legacyUid);
+        let currentSourceDb = cloudDb;
 
-        // 偵測到救援成功 -> 執行金鑰修復 (Healing)
-        if (usedFallback) {
-          addSyncLog(`🩹 偵測到金鑰對齊異常，正在為您自動修復與校正...`);
-          await writeDriveDB(user.driveToken!, hid, primarySourceDb, effectiveUid, (m) => addSyncLog(m));
-          addSyncLog(`✅ 金鑰修復完成，下次登入將自動鎖定您的 Google ID。`);
+        // 若偵測到金鑰需要遷移，執行一次轉換寫入
+        if (keyMigrated) {
+          addSyncLog(`🔄 正在優化資料格式以適配新版同步...`);
+          await writeDriveDB(user.driveToken!, hid, currentSourceDb, primaryEmail, addSyncLog);
         }
         
-        // 遷移邏輯
-        if (primarySourceDb.cards.length === 0) {
+        // 遷移邏輯 (檢查 Visible)
+        if (currentSourceDb.cards.length === 0) {
           try {
-            const { db: legacyDb, usedFallback: legacyFallback } = await readDriveDB(user.driveToken!, vid, effectiveUid, (m) => addSyncLog(m), fallbackUid);
+            const { db: legacyDb } = await readDriveDB(user.driveToken!, vid, primaryEmail, addSyncLog, legacyUid);
             if (legacyDb.cards.length > 0) {
-              addSyncLog(`🔄 發現舊資料，執行自動對齊。`);
-              primarySourceDb = legacyDb;
-              await writeDriveDB(user.driveToken!, hid, primarySourceDb, effectiveUid, (m) => addSyncLog(m));
+              addSyncLog(`🔄 發現舊資料，執行自動遷移。`);
+              currentSourceDb = legacyDb;
+              await writeDriveDB(user.driveToken!, hid, currentSourceDb, primaryEmail, addSyncLog);
             }
           } catch (e) {
-            addSyncLog(`⚠️ 雲端暫無舊資料可對齊。`);
+             // 略過
           }
         }
 
-        const { db: cleanedDb, changed } = cleanupTrash(primarySourceDb);
+        const { db: cleanedDb, changed } = cleanupTrash(currentSourceDb);
 
         const localCards = useCardStore.getState().cards;
         const cardMap = new Map<string, any>();
@@ -161,11 +157,11 @@ export function useDriveSync() {
         }
 
         if (changed) {
-          await writeDriveDB(user.driveToken!, hid, cleanedDb, effectiveUid);
+          await writeDriveDB(user.driveToken!, hid, cleanedDb, primaryEmail);
         }
 
         setSyncStatus(false, Date.now());
-        addSyncLog(`🏁 帳號同步已就緒。`);
+        addSyncLog(`🏁 同步已就緒（帳號身分鎖定）。`);
       } catch (err: any) {
         addSyncLog(`🔥 初始化失敗: ${err.message || err}`);
         setSyncStatus(false, null);
@@ -176,7 +172,7 @@ export function useDriveSync() {
     };
 
     init();
-  }, [user?.driveToken, effectiveUid, syncOverrideUid, fallbackUid]);
+  }, [user?.driveToken, primaryEmail, legacyUid]);
 
   useEffect(() => {
     if (isInitialized && hiddenIdRef.current && syncQueue.length > 0) {

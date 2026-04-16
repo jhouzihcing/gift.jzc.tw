@@ -35,80 +35,42 @@ const emptyDB = (): DriveDB => ({
 });
 
 /**
- * 偵測隱藏空間中的所有檔案 (Nuclear Search Debug)
- */
-export async function listAllAppDataFiles(token: string): Promise<{ id: string, name: string, modifiedTime: string }[]> {
-  const res = await fetch(
-    `${DRIVE_API}/files?fields=files(id,name,modifiedTime)&spaces=appDataFolder&t=${Date.now()}`,
-    { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
-  );
-  if (!res.ok) return [];
-  const data = await res.json();
-  return data.files || [];
-}
-
-/**
- * 搜尋或建立資料檔案
+ * 搜尋或建立資料檔案 (v2.23.0 統一使用 Email)
  */
 export async function getOrCreateDriveFile(
   token: string, 
-  uid: string,
+  keySeed: string,
   space: 'drive' | 'appDataFolder' = 'drive',
   logFn?: (msg: string) => void
 ): Promise<string> {
   const fileName = space === 'drive' ? VISIBLE_FILENAME : PRIVATE_FILENAME;
   const q = `name='${fileName}' and trashed=false`;
   
-  logFn?.(`🔍 正在 ${space} 搜尋檔案: ${fileName}...`);
+  logFn?.(`🔍 搜尋雲端同步檔: ${fileName}...`);
 
-  let attempts = 0;
-  while (attempts < 2) {
-    const res = await fetch(
-      `${DRIVE_API}/files?q=${encodeURIComponent(q)}&fields=files(id,modifiedTime)&spaces=${space}&t=${Date.now()}`,
-      { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
+  const res = await fetch(
+    `${DRIVE_API}/files?q=${encodeURIComponent(q)}&fields=files(id,modifiedTime)&spaces=${space}&t=${Date.now()}`,
+    { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
+  );
+  if (!res.ok) throw new Error(`Search failed in ${space}`);
+  
+  const data = await res.json();
+
+  if (data.files && data.files.length > 0) {
+    const sorted = data.files.sort((a: any, b: any) => 
+      new Date(b.modifiedTime).getTime() - new Date(a.modifiedTime).getTime()
     );
-    if (!res.ok) {
-      logFn?.(`❌ 搜尋失敗 (HTTP ${res.status})`);
-      throw new Error(`Search failed in ${space}`);
-    }
-    const data = await res.json();
-
-    if (data.files && data.files.length > 0) {
-      const sorted = data.files.sort((a: any, b: any) => 
-        new Date(b.modifiedTime).getTime() - new Date(a.modifiedTime).getTime()
-      );
-      logFn?.(`✅ 找到 ${sorted.length} 個同名檔案，鎖定 ID: ${sorted[0].id}`);
-      return sorted[0].id;
-    }
-
-    attempts++;
-    if (attempts < 2) {
-      logFn?.(`⏳ 未發現檔案，1.5秒後重試搜尋...`);
-      await new Promise(resolve => setTimeout(resolve, 1500));
-    }
+    logFn?.(`✅ 已備妥雲端存取。`);
+    return sorted[0].id;
   }
 
-  // Nuclear Search
-  if (space === 'appDataFolder') {
-    logFn?.(`⚠️ 常規搜尋失敗，啟動全域掃描...`);
-    const allFiles = await listAllAppDataFiles(token);
-    if (allFiles.length > 0) {
-      logFn?.(`📢 全域發現 ${allFiles.length} 個隱藏檔案，但無目標名稱。`);
-    }
-  }
-
-  logFn?.(`🆕 確定無現有檔案，正在建立新同步檔...`);
-  const encrypted = await encryptDB(emptyDB(), uid);
+  logFn?.(`🆕 建立新同步檔...`);
+  const encrypted = await encryptDB(emptyDB(), keySeed);
   const metadata: any = { 
     name: fileName, 
     mimeType: "text/plain",
+    parents: [space === 'drive' ? 'root' : 'appDataFolder']
   };
-  
-  if (space === 'drive') {
-    metadata.parents = ['root'];
-  } else {
-    metadata.parents = ['appDataFolder'];
-  }
 
   const form = new FormData();
   form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
@@ -119,54 +81,50 @@ export async function getOrCreateDriveFile(
     headers: { Authorization: `Bearer ${token}` },
     body: form,
   });
-  if (!createRes.ok) throw new Error(`Create failed in ${space}`);
+  if (!createRes.ok) throw new Error(`Create failed`);
   const created = await createRes.json();
-  logFn?.(`✨ 新檔案建立成功！ID: ${created.id}`);
+  logFn?.(`✨ 雲端存取初始化完成。`);
   return created.id;
 }
 
 /**
- * 讀取資料 (v2.22.0 支援金鑰修復偵測)
+ * 讀取並解密 (v2.23.0 階層：Email 優先 -> UID 備索)
  */
 export async function readDriveDB(
   token: string,
   fileId: string,
-  uid: string,
+  email: string,
   logFn?: (msg: string) => void,
-  fallbackUid?: string
-): Promise<{ db: DriveDB, usedFallback: boolean }> {
-  logFn?.(`📡 正在從雲端抓取原始數據 (ID: ${fileId.slice(0, 8)})...`);
+  legacyUid?: string
+): Promise<{ db: DriveDB, keyMigrated: boolean }> {
+  logFn?.(`📡 抓取數據中...`);
   const res = await fetch(`${DRIVE_API}/files/${fileId}?alt=media&t=${Date.now()}`, {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
   });
-  if (!res.ok) {
-    logFn?.(`❌ 雲端抓取失敗 (HTTP ${res.status})`);
-    throw new Error(`Read failed: ${res.status}`);
-  }
+  if (!res.ok) throw new Error(`Read failed: ${res.status}`);
 
   const ciphertext = await res.text();
   
-  // 1. 如果是明文
+  // 1. 直接解析明文 (如有)
   if (ciphertext.trimStart().startsWith("{")) {
-    logFn?.(`🔓 偵測為明文 JSON，直接解析。`);
-    return { db: JSON.parse(ciphertext) as DriveDB, usedFallback: false };
+    return { db: JSON.parse(ciphertext) as DriveDB, keyMigrated: true };
   }
 
-  // 2. 嘗試主要 UID 解密
+  // 2. 優先使用 Email 解密 (v2.23.0 標準)
   try {
-    const decrypted = await decryptDB(ciphertext, uid);
-    logFn?.(`✅ 系統 ID 解密成功！`);
-    return { db: decrypted, usedFallback: false };
+    const decrypted = await decryptDB(ciphertext, email);
+    logFn?.(`✅ 解析成功 (採用帳號本機金鑰)。`);
+    return { db: decrypted, keyMigrated: false };
   } catch (e) {
-    // 3. Fallback
-    if (fallbackUid) {
+    // 3. Fallback: 使用舊版 UID 解密
+    if (legacyUid) {
        try {
-         const decryptedFallback = await decryptDB(ciphertext, fallbackUid);
-         logFn?.(`🩹 Email 救援成功！已成功跨裝置自動對齊。`);
-         return { db: decryptedFallback, usedFallback: true };
+         const decryptedLegacy = await decryptDB(ciphertext, legacyUid);
+         logFn?.(`🩹 已透過舊版金鑰找回資料，啟動自動格式更新...`);
+         return { db: decryptedLegacy, keyMigrated: true };
        } catch (fe) {
-         logFn?.(`🔥 無法解密。請確認 Google 帳號是否一致。`);
+         logFn?.(`🔥 無法解析資料。請確認帳號是否一致。`);
          throw fe;
        }
     } else {
@@ -182,11 +140,11 @@ export async function writeDriveDB(
   token: string,
   fileId: string,
   db: DriveDB,
-  uid: string,
+  keySeed: string,
   logFn?: (msg: string) => void
 ): Promise<void> {
-  logFn?.(`🚀 正同步至雲端...`);
-  const encrypted = await encryptDB({ ...db, lastModified: Date.now() }, uid);
+  logFn?.(`🚀 同步至雲端...`);
+  const encrypted = await encryptDB({ ...db, lastModified: Date.now() }, keySeed);
   const res = await fetch(`${UPLOAD_API}/files/${fileId}?uploadType=media`, {
     method: "PATCH",
     headers: {
@@ -195,11 +153,8 @@ export async function writeDriveDB(
     },
     body: encrypted,
   });
-  if (!res.ok) {
-    logFn?.(`❌ 雲端寫入失敗 (HTTP ${res.status})`);
-    throw new Error(`Write failed: ${res.status}`);
-  }
-  logFn?.(`✅ 雲端寫入成功。`);
+  if (!res.ok) throw new Error(`Write failed`);
+  logFn?.(`✅ 同步成功。`);
 }
 
 export function cleanupTrash(db: DriveDB): { db: DriveDB; changed: boolean } {

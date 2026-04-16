@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
+import { ScannerProfile } from "@/constants/scannerProfiles";
 
 export type ScanState = "idle" | "scanning-a" | "scanning-b" | "success" | "error" | "duplicate" | "loading" | "cooldown";
 
@@ -9,11 +10,11 @@ interface BarcodeData {
   secondary: string | null;
 }
 
-export function useScanner(elementId: string) {
+export function useScanner(elementId: string, profile: ScannerProfile) {
   const [scanState, setScanState] = useState<ScanState>("idle");
   const [data, setData] = useState<BarcodeData>({ primary: null, secondary: null });
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [isDualMode, setIsDualMode] = useState(false);
+  const [isDualMode, setIsDualMode] = useState(profile.isDualModeDefault);
   
   const dataRef = useRef<BarcodeData>({ primary: null, secondary: null });
   const isInitializing = useRef(false);
@@ -21,11 +22,11 @@ export function useScanner(elementId: string) {
   const isProcessing = useRef(false);
   const quaggaLibRef = useRef<any>(null);
 
-  // ✅ 核心修復：用 Ref 鏡像 state，讓 handleDetected 讀取最新值而不產生依賴
   const scanStateRef = useRef<ScanState>("idle");
-  const isDualModeRef = useRef(false);
+  const isDualModeRef = useRef(profile.isDualModeDefault);
+  const profileRef = useRef<ScannerProfile>(profile);
 
-  // 同步 ref 與 state
+  // 同步 ref
   const setScanStateSync = useCallback((s: ScanState) => {
     scanStateRef.current = s;
     setScanState(s);
@@ -78,11 +79,10 @@ export function useScanner(elementId: string) {
     }, 2500);
   }, [setScanStateSync, resetData]);
 
-  // ✅ 不再依賴任何 state，完全透過 ref 讀取最新狀態
   const handleDetected = useCallback((result: any) => {
-    // 透過 ref 讀取最新值，避免 stale closure
     const currentScanState = scanStateRef.current;
     const currentIsDualMode = isDualModeRef.current;
+    const currentProfile = profileRef.current;
 
     if (isProcessing.current || !isMounted.current) return;
     if (currentScanState === "cooldown" || currentScanState === "success") return;
@@ -94,24 +94,26 @@ export function useScanner(elementId: string) {
     let foundPrimary: string | null = null;
     let foundSecondary: string | null = null;
 
+    // v2.13.0 使用 Profile 進行動態識別
     for (const r of results) {
       if (r.codeResult.confidence < 0.6) continue;
-      const text = r.codeResult.code;
-      if (text.length === 16 && /^\d+$/.test(text)) {
+      const text = r.codeResult.code as string;
+      
+      if (currentProfile.primaryValidator(text)) {
         foundPrimary = text;
-      } else {
+      } else if (currentProfile.secondaryValidator(text, currentData.primary || "")) {
         foundSecondary = text;
       }
     }
 
-    // 瞬發雙掃描：同時捕捉卡號與密碼
+    // 瞬發雙掃描 (如果 Profile 支援)
     if (currentIsDualMode && foundPrimary && foundSecondary && foundPrimary !== foundSecondary) {
       isProcessing.current = true;
-      triggerVibrate([60, 100, 60]);
+      triggerVibrate(currentProfile.vibrationPattern);
       dataRef.current = { primary: foundPrimary, secondary: foundSecondary };
       setData({ primary: foundPrimary, secondary: foundSecondary });
       setScanStateSync("success");
-      setTimeout(startCooldown, 50); // 給 React 一點時間處理 Success 狀態
+      setTimeout(startCooldown, 50);
       return;
     }
 
@@ -120,7 +122,7 @@ export function useScanner(elementId: string) {
     const text = firstMatch.codeResult.code;
 
     if (!currentData.primary) {
-      if (text.length === 16 && /^\d+$/.test(text)) {
+      if (currentProfile.primaryValidator(text)) {
         isProcessing.current = true;
         triggerVibrate(60);
         currentData.primary = text;
@@ -134,22 +136,20 @@ export function useScanner(elementId: string) {
           setTimeout(() => { if (isMounted.current) isProcessing.current = false; }, 1500);
         }
       }
-    } else if (currentIsDualMode && !currentData.secondary && text !== currentData.primary) {
+    } else if (currentIsDualMode && !currentData.secondary && currentProfile.secondaryValidator(text, currentData.primary)) {
       isProcessing.current = true;
-      triggerVibrate([100, 50, 100]);
+      triggerVibrate(currentProfile.vibrationPattern);
       currentData.secondary = text;
       setData({ ...currentData });
       setScanStateSync("success");
       setTimeout(startCooldown, 50);
     }
-  // ✅ 依賴陣列不含任何 state，只有穩定的函數引用
   }, [setScanStateSync, startCooldown]);
 
   const startScanning = useCallback(async () => {
     if (isInitializing.current) return;
     isInitializing.current = true;
 
-    // 先停止可能仍在運行的實例
     const ExistingQuagga = quaggaLibRef.current;
     if (ExistingQuagga) {
       try {
@@ -166,7 +166,6 @@ export function useScanner(elementId: string) {
     setData({ primary: null, secondary: null });
     setErrorMsg(null);
 
-    // 給 DOM 渲染時間
     await new Promise(r => setTimeout(r, 300));
 
     try {
@@ -175,6 +174,7 @@ export function useScanner(elementId: string) {
       const Quagga = await getQuagga();
       if (!Quagga) throw new Error("Quagga unavailable");
 
+      // v2.13.0 依據 Profile 動態配置 readers
       await Quagga.init({
         inputStream: {
           name: "LiveStream",
@@ -192,7 +192,7 @@ export function useScanner(elementId: string) {
         },
         numOfWorkers: 2,
         decoder: {
-          readers: ["code_128_reader"],
+          readers: profileRef.current.readers,
           multiple: true,
         },
         locate: true,
@@ -212,27 +212,29 @@ export function useScanner(elementId: string) {
     } finally {
       isInitializing.current = false;
     }
-  // ✅ handleDetected 現在是穩定的，startScanning 不再被 scanState 變化觸發重建
   }, [elementId, handleDetected, getQuagga, setScanStateSync]);
 
   const skipSecondary = useCallback(() => {
     if (dataRef.current.primary) {
       isProcessing.current = true;
       setScanStateSync("success");
-      setTimeout(startCooldown, 50); // 與 handleDetected 保持一致
+      setTimeout(startCooldown, 50);
     }
   }, [setScanStateSync, startCooldown]);
 
-  // 同步 isDualMode state -> ref
+  // 同步 refs
   useEffect(() => {
     isDualModeRef.current = isDualMode;
   }, [isDualMode]);
 
   useEffect(() => {
+    profileRef.current = profile;
+  }, [profile]);
+
+  useEffect(() => {
     isMounted.current = true;
     return () => {
       isMounted.current = false;
-      // 清理 Quagga
       const Q = quaggaLibRef.current;
       if (Q) {
         try { Q.offDetected(); Q.stop(); } catch (_) {}

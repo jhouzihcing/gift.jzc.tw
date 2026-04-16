@@ -5,10 +5,25 @@ import { useRouter } from "next/navigation";
 import { useScanner } from "@/hooks/useScanner";
 import ScannerOverlay from "@/components/ScannerOverlay";
 import { useCardStore } from "@/store/useCardStore";
-import { ScanLine, ChevronLeft, Layers, Minus } from "lucide-react";
+import { ScanLine, ChevronLeft, Layers, Minus, Plus } from "lucide-react";
+import { SCANNER_PROFILES } from "@/constants/scannerProfiles";
 
 export default function ScanPage() {
   const router = useRouter();
+  const { addCard, customMerchants, cards } = useCardStore();
+
+  const [isReadyToScan, setIsReadyToScan] = useState(false);
+  const [merchant, setMerchant] = useState("7-11");
+  const [isCustomMode, setIsCustomMode] = useState(false);
+  const [amount, setAmount] = useState<number | "">("");
+
+  // v2.13.0 根據商家選擇動態決定掃描設定檔
+  const activeProfile = useMemo(() => {
+    if (merchant === "7-11") return SCANNER_PROFILES["7-11"];
+    // 其它自訂商家統一使用通用模式
+    return SCANNER_PROFILES["Generic"];
+  }, [merchant]);
+
   const { 
     startScanning, 
     stopScanning, 
@@ -18,16 +33,8 @@ export default function ScanPage() {
     isDualMode, 
     setIsDualMode, 
     skipSecondary 
-  } = useScanner("reader-video");
+  } = useScanner("reader-video", activeProfile);
   
-  const { addCard, customMerchants, cards } = useCardStore();
-
-  const [isReadyToScan, setIsReadyToScan] = useState(false);
-  const [merchant, setMerchant] = useState("7-11");
-  const [isCustomMode, setIsCustomMode] = useState(false);
-  const [amount, setAmount] = useState<number | "">("");
-  const [isBatch] = useState(true);
-
   // 初始化模式偏好
   useEffect(() => {
     const savedMode = localStorage.getItem("sgcm-scan-mode");
@@ -47,11 +54,12 @@ export default function ScanPage() {
     setIsReadyToScan(true);
   };
 
-  // 當商家改變時的智能切換
   const handleMerchantChange = (m: string) => {
     if (m === "其它自訂") {
       setIsCustomMode(true);
       setMerchant("");
+      // 切換到自訂時，通常預設關閉雙模式（除非手動開啟）
+      setIsDualMode(false);
     } else {
       setIsCustomMode(false);
       setMerchant(m);
@@ -61,7 +69,6 @@ export default function ScanPage() {
     }
   };
 
-  // 儲存用戶手動切換的偏好
   const toggleDualMode = () => {
     const nextMode = !isDualMode;
     setIsDualMode(nextMode);
@@ -75,8 +82,7 @@ export default function ScanPage() {
       stopScanning();
     }
     return () => { stopScanning(); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isReadyToScan]);
+  }, [isReadyToScan, startScanning, stopScanning]);
 
   const [sessionStartTime] = useState(Date.now());
   const lastScannedId = useRef<string | null>(null);
@@ -87,10 +93,8 @@ export default function ScanPage() {
       .sort((a, b) => b.createdAt - a.createdAt);
   }, [cards, sessionStartTime]);
 
-  // v1.12.0 自動存檔與 Session 追蹤
   useEffect(() => {
     if (scanState === "success" || scanState === "cooldown") {
-      // 必須有有效的卡號才執行
       if (!data.primary) return;
       
       const rawMerchant = isCustomMode && !merchant.trim() ? "未命名商家" : merchant;
@@ -104,8 +108,6 @@ export default function ScanPage() {
       };
 
       const newId = generateId();
-      
-      // 防止 React StrictMode 或重複觸發
       if (lastScannedId.current === data.primary) return;
       lastScannedId.current = data.primary;
 
@@ -118,13 +120,13 @@ export default function ScanPage() {
         amount: Number(amount),
         createdAt: Date.now(),
         deletedAt: null,
+        status: "Active" as any,
         isSynced: false
       };
 
       addCard(newCard);
-      // 注意：useDriveSync 透過 Zustand 訂閱自動偵測到新增的未同步卡片，無需在此明確觸發
     } else if (scanState === "scanning-a" || scanState === "idle") {
-      lastScannedId.current = null; // 重設追蹤
+      lastScannedId.current = null;
     }
   }, [scanState, addCard, data, merchant, isCustomMode, amount]);
 
@@ -160,29 +162,43 @@ export default function ScanPage() {
               <div className="flex flex-col gap-3">
                 <div className="flex justify-between items-center px-1">
                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">選擇存檔商家</label>
-                   <span className="text-[9px] text-[#34DA4F] font-black">7-11 專用模式</span>
+                   <span className="text-[9px] text-[#34DA4F] font-black">{merchant === "7-11" ? "7-11 專家模式" : "通用模式"}</span>
                 </div>
                 <div className="flex gap-2 overflow-x-auto pb-4 pt-1 scrollbar-hide snap-x">
-                  {/* 7-11 是目前唯一啟用的選項 */}
                   <button
                     onClick={() => handleMerchantChange("7-11")}
-                    className="shrink-0 px-6 py-4 rounded-[1.5rem] font-black transition-all snap-start border-2 text-sm bg-slate-900 text-[#34DA4F] border-slate-900 shadow-xl shadow-slate-900/10"
+                    className={`shrink-0 px-6 py-4 rounded-[1.5rem] font-black transition-all snap-start border-2 text-sm ${merchant === "7-11" ? 'bg-slate-900 text-[#34DA4F] border-slate-900 shadow-xl' : 'bg-white text-slate-400 border-slate-100'}`}
                   >
                     7-11
                   </button>
 
-                  {/* 其餘自訂商家顯示為待開發 */}
-                  {[...customMerchants, "其它自訂"].map((m) => (
+                  {customMerchants.map((m) => (
                     <button
                       key={m}
-                      disabled
-                      className="shrink-0 px-6 py-4 rounded-[1.5rem] font-black transition-all snap-start border-2 text-sm bg-white text-slate-200 border-slate-50 cursor-not-allowed flex flex-col items-center gap-1 opacity-50"
+                      onClick={() => handleMerchantChange(m)}
+                      className={`shrink-0 px-6 py-4 rounded-[1.5rem] font-black transition-all snap-start border-2 text-sm ${merchant === m ? 'bg-slate-900 text-[#34DA4F] border-slate-900 shadow-xl' : 'bg-white text-slate-400 border-slate-100'}`}
                     >
-                      <span>{m}</span>
-                      <span className="text-[8px] opacity-60">待開放</span>
+                      {m}
                     </button>
                   ))}
+
+                  <button
+                    onClick={() => handleMerchantChange("其它自訂")}
+                    className={`shrink-0 px-6 py-4 rounded-[1.5rem] font-black transition-all snap-start border-2 text-sm ${isCustomMode ? 'bg-slate-900 text-[#34DA4F] border-slate-900 shadow-xl' : 'bg-white text-slate-400 border-slate-100'}`}
+                  >
+                    <Plus size={16} />
+                  </button>
                 </div>
+
+                {isCustomMode && (
+                   <input 
+                     type="text" 
+                     placeholder="輸入商家名稱..." 
+                     value={merchant}
+                     onChange={(e) => setMerchant(e.target.value)}
+                     className="w-full bg-white border-2 border-[#34DA4F]/20 rounded-2xl px-6 py-4 text-slate-900 font-bold outline-none focus:border-[#34DA4F] transition-all"
+                   />
+                )}
               </div>
 
               <div className="flex flex-col gap-3">
@@ -200,10 +216,12 @@ export default function ScanPage() {
               </div>
 
               <div className="bg-white p-6 rounded-[2rem] shadow-[0_10px_40px_-10px_rgba(52,199,89,0.1)] border border-slate-100">
-                 <div className="flex items-center justify-between">
+                 <div className="items-center justify-between flex">
                     <div>
                        <h3 className="font-black text-slate-800 text-sm">智慧雙條碼模式</h3>
-                       <p className="text-[10px] text-slate-400 mt-1 font-bold italic">自動識別卡號與密碼</p>
+                       <p className="text-[10px] text-slate-400 mt-1 font-bold italic">
+                          {activeProfile.id === "7-11" ? "自動識別卡號與密碼" : "自訂掃描模式"}
+                       </p>
                     </div>
                     <button 
                       onClick={toggleDualMode}
@@ -229,10 +247,7 @@ export default function ScanPage() {
 
   return (
     <div className="fixed inset-0 z-50 bg-black flex flex-col overflow-hidden">
-       {/* 掃描引擎容器 */}
        <div id="reader-video" className="absolute inset-0 w-full h-full object-cover"></div>
-       
-       {/* 覆蓋層組件 */}
        <ScannerOverlay 
          scanState={scanState} 
          onClose={handleClose} 
@@ -241,34 +256,29 @@ export default function ScanPage() {
          amount={amount}
          sessionCards={sessionCards}
        />
-
-       {/* 錯誤恢復介面 */}
        {scanState === "error" && (
-         <div className="absolute inset-0 z-[70] bg-slate-900 flex flex-col items-center justify-center p-8 text-center">
-            <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mb-6">
-              <ScanLine size={40} className="text-red-500" />
-            </div>
-            <h2 className="text-white text-2xl font-black mb-2">相機啟動失敗</h2>
-            <p className="text-slate-400 text-sm max-w-[240px]">請確認已授權相機權限並重新嘗試</p>
-            <div className="flex flex-col w-full gap-4 mt-8 max-w-xs">
-              <button 
-                onClick={() => startScanning()}
-                className="w-full bg-[#34DA4F] text-white font-black py-5 rounded-3xl shadow-xl shadow-[#34DA4F]/20"
-              >
-                嘗試重啟相機
-              </button>
-              <button 
-                onClick={handleClose}
-                className="w-full bg-white/10 text-slate-400 font-bold py-4 rounded-3xl"
-              >
-                取消並返回
-              </button>
-            </div>
-         </div>
+          <div className="absolute inset-0 z-[70] bg-slate-900 flex flex-col items-center justify-center p-8 text-center">
+             <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mb-6">
+               <ScanLine size={40} className="text-red-500" />
+             </div>
+             <h2 className="text-white text-2xl font-black mb-2">相機啟動失敗</h2>
+             <p className="text-slate-400 text-sm max-w-[240px]">請確認已授權相機權限並重新嘗試</p>
+             <div className="flex flex-col w-full gap-4 mt-8 max-w-xs">
+               <button 
+                 onClick={() => startScanning()}
+                 className="w-full bg-[#34DA4F] text-white font-black py-5 rounded-3xl shadow-xl shadow-[#34DA4F]/20"
+               >
+                 嘗試重啟相機
+               </button>
+               <button 
+                 onClick={handleClose}
+                 className="w-full bg-white/10 text-slate-400 font-bold py-4 rounded-3xl"
+               >
+                 取消並返回
+               </button>
+             </div>
+          </div>
        )}
     </div>
   );
 }
-
-
-

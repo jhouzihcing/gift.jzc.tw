@@ -1,10 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ShieldCheck, Database, Code, AlertTriangle, Globe, Lock, Share2, Trash2, Gavel, HeartHandshake, Eye, ShieldAlert, Copyright } from "lucide-react";
+import { ChevronLeft, ShieldCheck, Database, Code, AlertTriangle, Globe, Lock, Share2, Trash2, Gavel, HeartHandshake, Eye, ShieldAlert, Copyright, Github, ExternalLink } from "lucide-react";
+import Link from "next/link";
 
 /**
- * ZJ Card Privacy Policy & Legal Disclaimer Page (v2.28.0)
+ * ZJ Card Privacy Policy & Legal Disclaimer Page (v2.30.0)
  * ─────────────────────────────────────────────
  * Layout: 
  *   Top -> Main Chinese version for local users (Large/Clear).
@@ -12,6 +13,7 @@ import { ChevronLeft, ShieldCheck, Database, Code, AlertTriangle, Globe, Lock, S
  */
 export default function PrivacyPage() {
   const router = useRouter();
+  const githubUrl = "https://github.com/jhouzihcing/gift.jzc.tw";
 
   return (
     <div className="min-h-[100dvh] bg-white flex flex-col font-sans text-gray-900 pb-24">
@@ -26,7 +28,7 @@ export default function PrivacyPage() {
              <h1 className="text-xl font-black tracking-tight text-slate-800">隱私權政策與法律聲明</h1>
           </div>
           <div className="bg-[#34DA4F]/10 text-[#34DA4F] px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
-             v2.28.0
+             v2.30.0
           </div>
         </header>
 
@@ -39,14 +41,27 @@ export default function PrivacyPage() {
             
             <section className="space-y-4 text-center md:text-left">
                <h2 className="text-4xl font-black text-slate-900 leading-tight">ZJ Card 禮物卡管家</h2>
-               <div className="p-6 bg-[#34DA4F]/5 rounded-[2rem] border border-[#34DA4F]/10 space-y-3">
+               <div className="p-6 bg-[#34DA4F]/5 rounded-[2rem] border border-[#34DA4F]/10 space-y-4">
                   <p className="text-[#1A8A2A] font-black text-base leading-relaxed">
                      本程式為「完全免費、開源且不盈利」之公益專案。
                      我們深知個資安全的重要性，因此採用了最嚴格的加密技術，確保您的資料主權始終掌握在自己手中。
                   </p>
-                  <div className="flex items-center justify-center md:justify-start gap-2 text-[11px] text-[#1A8A2A]/60 font-black uppercase tracking-tighter">
-                     <Copyright size={12} />
-                     本產品之品牌標誌 (Logo)、名稱及網域 (gift.jzc.tw) 皆歸開發者所有。
+                  
+                  {/* v2.30.0 GitHub Link */}
+                  <div className="flex flex-col md:flex-row gap-3 pt-2">
+                     <Link 
+                       href={githubUrl}
+                       target="_blank"
+                       className="flex items-center justify-center gap-2 bg-slate-900 text-white px-5 py-3 rounded-2xl font-black text-sm hover:scale-[1.02] active:scale-95 transition-all shadow-lg shadow-slate-200"
+                     >
+                        <Github size={18} />
+                        開源專案程式碼 (GitHub)
+                        <ExternalLink size={14} className="opacity-50" />
+                     </Link>
+                     <div className="flex items-center justify-center md:justify-start gap-2 text-[10px] text-[#1A8A2A]/60 font-black uppercase tracking-tighter">
+                        <Copyright size={12} />
+                        品牌標誌、名稱及網域歸開發者所有。
+                     </div>
                   </div>
                </div>
             </section>
@@ -169,7 +184,7 @@ export default function PrivacyPage() {
 
                 <div className="space-y-2">
                    <h4 className="font-black text-slate-700 uppercase tracking-tight">6. Non-Profit Disclaimer</h4>
-                   <p>This software is a non-profit, open-source personal project. Brand logos, names, and the domain are owned by the developer. It is provided "AS IS".</p>
+                   <p>This software is a non-profit, <Link href={githubUrl} target="_blank" className="underline">open-source</Link> personal project. Brand logos, names, and the domain are owned by the developer. It is provided "AS IS".</p>
                 </div>
 
              </div>
@@ -179,10 +194,10 @@ export default function PrivacyPage() {
              <div className="flex flex-col items-center gap-2 text-slate-300 font-black text-[10px] uppercase tracking-widest leading-loose">
                 <div className="flex items-center gap-2">
                    <HeartHandshake size={14} className="text-[#34DA4F]" />
-                   ZJ Card公益開發小組 • Version 2.28.0
+                   ZJ Card公益開發小組 • Version 2.30.0
                 </div>
                 <div className="opacity-50 text-[9px] tracking-widest mt-2 bg-slate-50 px-3 py-1 rounded-full border border-slate-100">
-                   最後更新時間 Last Updated: 2026-04-16 23:25:00
+                   最後更新時間 Last Updated: 2026-04-16 23:38:00
                 </div>
              </div>
           </footer>

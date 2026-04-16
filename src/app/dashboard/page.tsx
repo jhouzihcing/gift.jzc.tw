@@ -4,8 +4,8 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { useCardStore } from "@/store/useCardStore";
 import { VERSION } from "@/constants/version";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useMemo } from "react";
-import { ScanLine, CreditCard, Store, Settings, Wallet, TrendingUp } from "lucide-react";
+import { useEffect, useMemo } from "react";
+import { ScanLine, CreditCard, Store, Settings } from "lucide-react";
 import GiftCard from "@/components/GiftCard";
 import Link from "next/link";
 
@@ -25,22 +25,6 @@ export default function Dashboard() {
       .filter((c) => c.deletedAt === null)
       .sort((a, b) => a.amount - b.amount);
   }, [cards]);
-
-  // v2.14.0 資產聚合邏輯
-  const balanceStats = useMemo(() => {
-    const stats: Record<string, number> = {};
-    let total = 0;
-
-    filteredCards.forEach(card => {
-      stats[card.merchant] = (stats[card.merchant] || 0) + card.amount;
-      total += card.amount;
-    });
-
-    return {
-      total,
-      merchants: Object.entries(stats).sort((a, b) => b[1] - a[1]) // 按金額降序
-    };
-  }, [filteredCards]);
 
   if (loading || !user) return <div className="h-[100dvh] bg-slate-50 flex flex-col items-center justify-center font-black tracking-widest text-slate-300 animate-pulse">系統加載中...</div>;
 
@@ -74,41 +58,6 @@ export default function Dashboard() {
            </span>
         </div>
       </header>
-
-      {/* v2.14.0 資產概覽區塊 */}
-      <section className="px-6 py-4 z-20 shrink-0">
-        <div className="bg-white/70 backdrop-blur-xl border border-white rounded-[2rem] p-6 shadow-xl shadow-[#34DA4F]/5 relative overflow-hidden">
-           <div className="absolute top-0 right-0 w-32 h-32 bg-[#34DA4F]/5 rounded-full blur-3xl -mr-10 -mt-10" />
-           
-           <div className="flex flex-col gap-1 relative z-10">
-              <div className="flex items-center gap-2 text-slate-400 mb-1">
-                 <Wallet size={14} className="text-[#34DA4F]" />
-                 <span className="text-[10px] font-black uppercase tracking-[0.2em]">資產總餘額統計</span>
-              </div>
-              <div className="flex items-baseline gap-1">
-                 <span className="text-sm font-black text-[#34DA4F] opacity-60">$</span>
-                 <span className="text-4xl font-black tracking-tighter text-slate-900">
-                    {balanceStats.total.toLocaleString()}
-                 </span>
-              </div>
-           </div>
-
-           {/* 商家分佈膠囊 */}
-           {balanceStats.merchants.length > 0 && (
-             <div className="mt-5 flex gap-2 overflow-x-auto scrollbar-hide -mx-2 px-2">
-                {balanceStats.merchants.map(([name, amount]) => (
-                  <div 
-                    key={name}
-                    className="shrink-0 bg-slate-900/5 border border-slate-900/5 px-4 py-2 rounded-xl flex items-center gap-2"
-                  >
-                    <span className="text-[11px] font-black text-slate-600">{name}</span>
-                    <span className="text-[11px] font-black text-[#34DA4F]">${amount.toLocaleString()}</span>
-                  </div>
-                ))}
-             </div>
-           )}
-        </div>
-      </section>
 
       {/* 主要內容區 */}
       <main className="flex-1 flex flex-col justify-center overflow-hidden relative">

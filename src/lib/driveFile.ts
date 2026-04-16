@@ -34,40 +34,43 @@ const emptyDB = (): DriveDB => ({
 });
 
 /**
- * 在指定空間搜尋或建立資料檔案
- * @param space 'drive' (根目錄) 或 'appDataFolder' (隱藏)
+ * 在根目錄搜尋或建立資料檔案 (v2.16.0 純淨顯性版)
  */
 export async function getOrCreateDriveFile(
   token: string, 
-  uid: string, 
-  space: 'drive' | 'appDataFolder' = 'drive'
+  uid: string
 ): Promise<string> {
-  // 1. 搜尋現有檔案
   const q = `name='${VISIBLE_FILENAME}' and trashed=false`;
-  const res = await fetch(
-    `${DRIVE_API}/files?q=${encodeURIComponent(q)}&fields=files(id)&spaces=${space}&t=${Date.now()}`,
-    { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
-  );
-  if (!res.ok) throw new Error(`Search failed in ${space}`);
-  const data = await res.json();
+  
+  // 策略：嘗試兩次搜尋，中間間隔 2 秒，以對抗 Google 索引延遲
+  let attempts = 0;
+  while (attempts < 2) {
+    const res = await fetch(
+      `${DRIVE_API}/files?q=${encodeURIComponent(q)}&fields=files(id)&spaces=drive&t=${Date.now()}`,
+      { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
+    );
+    if (!res.ok) throw new Error(`Search failed`);
+    const data = await res.json();
 
-  if (data.files && data.files.length > 0) {
-    return data.files[0].id;
+    if (data.files && data.files.length > 0) {
+      return data.files[0].id;
+    }
+
+    attempts++;
+    if (attempts < 2) {
+      console.log(`[Drive] 尚未找到檔案，等待 2 秒後由重試搜尋... (Attempt ${attempts})`);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
   }
 
-  // 2. 建立新檔案
+  // 真的沒找到，才建立新檔案
+  console.log(`[Drive] 確認無現有檔案，正在建立新同步檔：${VISIBLE_FILENAME}`);
   const encrypted = await encryptDB(emptyDB(), uid);
-  const metadata: any = { 
+  const metadata = { 
     name: VISIBLE_FILENAME, 
     mimeType: "text/plain",
+    parents: ['root'] // 強制在根目錄建立
   };
-
-  // v2.15.0: 強制路徑定位
-  if (space === 'appDataFolder') {
-    metadata.parents = ['appDataFolder'];
-  } else {
-    metadata.parents = ['root']; // 強制在根目錄
-  }
 
   const form = new FormData();
   form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
@@ -78,7 +81,7 @@ export async function getOrCreateDriveFile(
     headers: { Authorization: `Bearer ${token}` },
     body: form,
   });
-  if (!createRes.ok) throw new Error(`Create failed in ${space}`);
+  if (!createRes.ok) throw new Error(`Create failed`);
   const created = await createRes.json();
   return created.id;
 }
@@ -90,18 +93,8 @@ export async function readDriveDB(
   token: string,
   fileId: string,
   uid: string
-): Promise<{ db: DriveDB; lastModifiedTime: number }> {
-  // 獲取檔案中繼資料以取得真實修改時間
-  const metaRes = await fetch(`${DRIVE_API}/files/${fileId}?fields=modifiedTime`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store",
-  });
-  let lastModifiedTime = 0;
-  if (metaRes.ok) {
-    const meta = await metaRes.json();
-    lastModifiedTime = new Date(meta.modifiedTime).getTime();
-  }
-
+): Promise<{ db: DriveDB }> {
+  // 增加強制快取破除
   const res = await fetch(`${DRIVE_API}/files/${fileId}?alt=media&t=${Date.now()}`, {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
@@ -111,13 +104,13 @@ export async function readDriveDB(
   const ciphertext = await res.text();
 
   if (ciphertext.trimStart().startsWith("{")) {
-    return { db: JSON.parse(ciphertext) as DriveDB, lastModifiedTime };
+    return { db: JSON.parse(ciphertext) as DriveDB };
   }
-  return { db: await decryptDB(ciphertext, uid), lastModifiedTime };
+  return { db: await decryptDB(ciphertext, uid) };
 }
 
 /**
- * 寫入指定 File ID
+ * 寫入指定 File ID (PATCH)
  */
 export async function writeDriveDB(
   token: string,
@@ -140,7 +133,7 @@ export async function writeDriveDB(
 }
 
 /**
- * 舊檔遷移 (僅限根目錄)
+ * 舊檔遷移
  */
 export async function migrateOldVisibleFile(token: string): Promise<void> {
   try {

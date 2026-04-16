@@ -35,6 +35,19 @@ const emptyDB = (): DriveDB => ({
 });
 
 /**
+ * 徹底刪除雲端檔案 (v2.24.0 重設工具專用)
+ */
+export async function deleteDriveFile(token: string, fileId: string): Promise<void> {
+  const res = await fetch(`${DRIVE_API}/files/${fileId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok && res.status !== 404) {
+    throw new Error(`Delete failed: ${res.status}`);
+  }
+}
+
+/**
  * 搜尋或建立資料檔案 (v2.23.0 統一使用 Email)
  */
 export async function getOrCreateDriveFile(

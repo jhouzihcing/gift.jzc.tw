@@ -8,17 +8,22 @@ import { signOut } from "next-auth/react";
 import { 
   ChevronLeft, LogOut, Trash2, Plus, Store, RotateCcw, 
   RefreshCw, ShieldCheck, ChevronRight, CheckCircle2, 
-  Settings2, Terminal
+  Terminal, AlertTriangle, Zap, Trash
 } from "lucide-react";
 import { VERSION } from "@/constants/version";
+import { deleteDriveFile } from "@/lib/driveFile";
 
 export default function SettingsPage() {
   const router = useRouter();
   const { user } = useAuthStore();
-  const { cards, customMerchants, addCustomMerchant, restoreFromTrash, deletePermanently, syncLogs } = useCardStore();
+  const { 
+    cards, cloudFileIds, customMerchants, addCustomMerchant, 
+    restoreFromTrash, deletePermanently, syncLogs, setCards 
+  } = useCardStore();
   
   const [newMerchant, setNewMerchant] = useState("");
   const [showLogs, setShowLogs] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
 
   const trashCards = cards.filter(c => c.deletedAt !== null);
@@ -55,6 +60,43 @@ export default function SettingsPage() {
 
   const handleLogout = async () => {
     await signOut({ callbackUrl: "/" });
+  };
+
+  /**
+   * 核彈級重設 (Nuclear Reset)
+   * 1. 刪除雲端檔案 (隱藏 + 公開)
+   * 2. 清空本地 Store
+   * 3. 清理快取並重啟
+   */
+  const handleResetCloudSync = async () => {
+    if (!user?.driveToken) return;
+    
+    const confirmed = window.confirm(
+      "⚠️ 警告：這將永久刪除雲端上的所有同步資料，並清空此設備的卡片。此操作無法撤銷。確定要重設嗎？"
+    );
+    if (!confirmed) return;
+
+    setIsResetting(true);
+    try {
+      // 1. 刪除雲端檔案
+      if (cloudFileIds.hidden) {
+        await deleteDriveFile(user.driveToken, cloudFileIds.hidden);
+      }
+      if (cloudFileIds.visible) {
+        await deleteDriveFile(user.driveToken, cloudFileIds.visible);
+      }
+
+      // 2. 清除本地快取
+      localStorage.clear(); 
+      setCards([]);
+      
+      alert("✅ 雲端資料已清空。即將重新整理頁面...");
+      window.location.href = "/"; // 強制回到首頁並重載
+    } catch (e: any) {
+      alert("❌ 重設失敗: " + e.message);
+    } finally {
+      setIsResetting(false);
+    }
   };
 
   return (
@@ -98,7 +140,7 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* 雲端同步狀態 (v2.23.0 極簡化) */}
+        {/* 雲端同步狀態 (v2.24.0 重設工具整合版) */}
         <section className="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col gap-5 relative overflow-hidden">
            <div className="flex justify-between items-center z-10">
               <div className="space-y-1">
@@ -122,24 +164,40 @@ export default function SettingsPage() {
            </div>
 
            {showLogs && (
-             <div className="bg-slate-900 rounded-2xl p-4 font-mono text-[10px] leading-relaxed max-h-[160px] overflow-y-auto custom-scrollbar animate-in fade-in slide-in-from-top-1 duration-200">
-                {syncLogs.length === 0 ? (
-                   <p className="text-slate-500 italic">連線中...</p>
-                ) : (
-                   syncLogs.map((log, i) => (
-                    <p key={i} className={log.includes("❌") || log.includes("🔥") ? "text-red-400" : log.includes("✅") ? "text-[#34DA4F]" : "text-slate-400"}>
-                      {log}
-                    </p>
-                   ))
-                )}
-                <div ref={logEndRef} />
+             <div className="flex flex-col gap-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                <div className="bg-slate-900 rounded-2xl p-4 font-mono text-[10px] leading-relaxed max-h-[160px] overflow-y-auto custom-scrollbar">
+                   {syncLogs.length === 0 ? (
+                      <p className="text-slate-500 italic">連線中...</p>
+                   ) : (
+                      syncLogs.map((log, i) => (
+                        <p key={i} className={log.includes("❌") || log.includes("🔥") ? "text-red-400" : log.includes("✅") ? "text-[#34DA4F]" : "text-slate-400"}>
+                          {log}
+                        </p>
+                      ))
+                   )}
+                   <div ref={logEndRef} />
+                </div>
+                
+                {/* 開發者測試工具：重設按鈕 */}
+                <button 
+                  onClick={handleResetCloudSync}
+                  disabled={isResetting}
+                  className="flex items-center justify-center gap-2 w-full py-4 bg-red-50 text-red-500 rounded-2xl border border-red-100 font-black text-xs uppercase tracking-widest active:scale-95 disabled:opacity-50 transition-all"
+                >
+                  {isResetting ? (
+                    <RefreshCw size={14} className="animate-spin" />
+                  ) : (
+                    <Zap size={14} />
+                  )}
+                  重設雲端同步並清空資料
+                </button>
              </div>
            )}
 
            <div className="flex items-start gap-2 bg-slate-50 p-4 rounded-2xl border border-slate-100">
               <ShieldCheck size={16} className="text-[#34DA4F] shrink-0 mt-0.5" />
               <p className="text-[10px] text-slate-400 font-bold leading-normal italic">
-                系統已結合 Google 帳號安全功能，所有資料在雲端均經過加密處理。只要登入同一個 Email，所有設備即可自動同步。
+                系統已自動鎖定您的 Google 帳號身分。如果您需要重新開始測試，請點選終端機圖示展開開發者重設選項。
               </p>
            </div>
         </section>

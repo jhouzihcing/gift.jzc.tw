@@ -23,6 +23,7 @@ interface CardStore {
   isPro: boolean;
   isInitialized: boolean;
   customMerchants: string[];
+  cloudFileIds: { visible: string | null; hidden: string | null };
   
   // v2.12.0 極速閃電佇列
   syncQueue: string[];
@@ -39,6 +40,7 @@ interface CardStore {
   setGlobalSyncing: (isSyncing: boolean) => void;
   removeFromQueue: (ids: string[]) => void;
   finishInitialization: () => void;
+  setCloudFileIds: (ids: { visible: string | null; hidden: string | null }) => void;
 }
 
 export const useCardStore = create<CardStore>()(
@@ -50,6 +52,9 @@ export const useCardStore = create<CardStore>()(
       customMerchants: [],
       syncQueue: [],
       isGlobalSyncing: false,
+      cloudFileIds: { visible: null, hidden: null },
+
+      setCloudFileIds: (ids) => set({ cloudFileIds: ids }),
 
       finishInitialization: () => set({ isInitialized: true }),
 

@@ -28,6 +28,9 @@ interface CardStore {
   // v2.12.0 極速閃電佇列
   syncQueue: string[];
   isGlobalSyncing: boolean;
+
+  // v2.19.0 同步日誌偵測
+  syncLogs: string[];
   
   addCard: (newCard: Card) => boolean;
   setCards: (cards: Card[]) => void;
@@ -41,6 +44,7 @@ interface CardStore {
   removeFromQueue: (ids: string[]) => void;
   finishInitialization: () => void;
   setCloudFileIds: (ids: { visible: string | null; hidden: string | null }) => void;
+  addSyncLog: (msg: string) => void;
 }
 
 export const useCardStore = create<CardStore>()(
@@ -53,6 +57,14 @@ export const useCardStore = create<CardStore>()(
       syncQueue: [],
       isGlobalSyncing: false,
       cloudFileIds: { visible: null, hidden: null },
+      syncLogs: [],
+
+      addSyncLog: (msg) => {
+        const timestamp = new Date().toLocaleTimeString('zh-TW', { hour12: false });
+        set((state) => ({ 
+          syncLogs: [`[${timestamp}] ${msg}`, ...state.syncLogs].slice(0, 50) 
+        }));
+      },
 
       setCloudFileIds: (ids) => set({ cloudFileIds: ids }),
 

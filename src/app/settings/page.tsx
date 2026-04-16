@@ -3,29 +3,38 @@
 import { useAuthStore } from "@/store/useAuthStore";
 import { useCardStore } from "@/store/useCardStore";
 import { useRouter } from "next/navigation";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { signOut } from "next-auth/react";
 import { 
   ChevronLeft, LogOut, Trash2, Plus, Store, RotateCcw, 
   RefreshCw, ShieldCheck, ChevronRight, Code, Database, 
-  CloudDownload, AlertCircle, EyeOff
+  CloudDownload, AlertCircle, EyeOff, Terminal, Info
 } from "lucide-react";
 import { VERSION } from "@/constants/version";
-import { readDriveDB, getOrCreateDriveFile, writeDriveDB } from "@/lib/driveFile";
+import { readDriveDB, getOrCreateDriveFile } from "@/lib/driveFile";
 
 export default function SettingsPage() {
   const router = useRouter();
   const { user, isSyncing, lastSync, setSyncStatus, setSyncError } = useAuthStore();
   const { 
     cards, cloudFileIds, customMerchants, addCustomMerchant,
-    restoreFromTrash, deletePermanently, setCards, setCloudFileIds
+    restoreFromTrash, deletePermanently, setCards, setCloudFileIds,
+    syncLogs, addSyncLog
   } = useCardStore();
   
   const [newMerchant, setNewMerchant] = useState("");
   const [isOverwriting, setIsOverwriting] = useState(false);
+  const [showLogs, setShowLogs] = useState(false);
+  const logEndRef = useRef<HTMLDivElement>(null);
 
   const trashCards = cards.filter(c => c.deletedAt !== null);
   const activeCards = cards.filter(c => c.deletedAt === null);
+
+  useEffect(() => {
+    if (showLogs) {
+      logEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [syncLogs, showLogs]);
 
   const merchantStats = useMemo(() => {
     const stats: Record<string, number> = {};
@@ -54,32 +63,35 @@ export default function SettingsPage() {
     await signOut({ callbackUrl: "/" });
   };
 
-  // v2.18.0: 強制同步校對 (AppData 優先)
+  // v2.19.0: 強制同步校對 (AppData 優先 + 詳細日誌)
   const handleForceCloudRestore = async () => {
     if (!user?.driveToken || !user?.uid) return;
-    if (!confirm("⚠️ 這將強制優先從隱藏空間 (AppData) 抓取資料並覆蓋本地，確定執行？")) return;
+    if (!confirm("⚠️ 這將強制優先從隱藏空間抓取資料，並覆蓋現有的手機資料，確定執行？")) return;
 
     setIsOverwriting(true);
+    setShowLogs(true);
     setSyncStatus(true, lastSync);
+    addSyncLog("🚨 啟動手動強制校驗流程...");
 
     try {
-      // 1. 取得最新 ID (優先抓 AppData)
-      const hid = await getOrCreateDriveFile(user.driveToken, user.uid, 'appDataFolder');
-      const vid = await getOrCreateDriveFile(user.driveToken, user.uid, 'drive');
+      addSyncLog("🔍 開始全域 ID 重新偵測...");
+      const hid = await getOrCreateDriveFile(user.driveToken, user.uid, 'appDataFolder', addSyncLog);
+      const vid = await getOrCreateDriveFile(user.driveToken, user.uid, 'drive', addSyncLog);
       setCloudFileIds({ visible: vid, hidden: hid });
 
-      // 2. 優先讀取 AppData 資料
-      let primarySource = await readDriveDB(user.driveToken, hid, user.uid);
+      addSyncLog("📥 正在強行讀取 AppData 資料庫...");
+      let primarySource = await readDriveDB(user.driveToken, hid, user.uid, addSyncLog);
       
-      // 3. 如果 AppData 是空的（剛遷移），嘗試讀取顯性作為備援
       if (primarySource.db.cards.length === 0) {
+         addSyncLog("ℹ️ AppData 無資料，嘗試轉向顯性空間備援...");
          try {
-           const legacy = await readDriveDB(user.driveToken, vid, user.uid);
+           const legacy = await readDriveDB(user.driveToken, vid, user.uid, addSyncLog);
            if (legacy.db.cards.length > 0) primarySource = legacy;
-         } catch {}
+         } catch (e) {
+           addSyncLog("⚠️ 顯性空間讀取失敗。");
+         }
       }
 
-      // 4. 更新本地
       const syncedCards = primarySource.db.cards.map(c => ({ ...c, isSynced: true }));
       setCards(syncedCards);
       
@@ -87,10 +99,11 @@ export default function SettingsPage() {
         primarySource.db.customMerchants.forEach(m => addCustomMerchant(m));
       }
 
-      alert("🎉 強制校對完成！AppData 資料已成功載入。");
+      addSyncLog("🎉 強制校對成功，本地資料已與雲端同步。");
+      alert("🎉 雲端資料已成功載入！");
     } catch (err: any) {
-      console.error("[Sync] 強制校對失敗:", err);
-      alert("❌ 校對失敗：" + (err.message || "網路錯誤"));
+      addSyncLog(`❌ 強制校對失敗: ${err.message || "未知原因"}`);
+      alert("❌ 校對失敗，請查看執行日誌。");
       setSyncError(true);
     } finally {
       setIsOverwriting(false);
@@ -119,7 +132,6 @@ export default function SettingsPage() {
         
         <section className="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col gap-5 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-[#34DA4F]/5 rounded-full blur-2xl -mr-8 -mt-8" />
-          
           <div className="flex items-center gap-4 relative z-10">
              <div className="w-14 h-14 bg-[#34DA4F]/10 text-[#34DA4F] rounded-2xl flex items-center justify-center font-black text-xl border border-[#34DA4F]/10">
                 {user?.email?.charAt(0).toUpperCase() || "U"}
@@ -129,7 +141,6 @@ export default function SettingsPage() {
                <p className="text-xs text-slate-400 font-bold">{user?.email}</p>
              </div>
           </div>
-          
           <div className="flex justify-between items-end pt-5 border-t border-slate-50 relative z-10">
              <div className="space-y-1">
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300">總資產估算</p>
@@ -145,50 +156,70 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* 同步穩定性診斷 (v2.18.0 AppData 核心) */}
+        {/* 同步穩定性診斷 (v2.19.0 同步日誌版) */}
         <section className="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col gap-5 relative overflow-hidden">
            <div className="flex justify-between items-start z-10">
               <div className="space-y-1">
-                 <h3 className="text-[10px] font-black text-[#34DA4F] uppercase tracking-[0.2em]">Hidden Residency Sync</h3>
+                 <h3 className="text-[10px] font-black text-[#34DA4F] uppercase tracking-[0.2em]">Diagnostic Console</h3>
                  <div className="flex items-center gap-2">
-                    <p className="text-xl font-black text-slate-800">私有雲端空間對齊</p>
-                    {isSyncing && <RefreshCw size={18} className="text-[#34DA4F] animate-spin" />}
+                    <p className="text-xl font-black text-slate-800">同步執行偵測日誌</p>
                  </div>
               </div>
               <div className="flex gap-2">
                  <button 
+                  onClick={() => setShowLogs(!showLogs)}
+                  className={`p-3 rounded-2xl border shadow-sm flex items-center justify-center transition-all ${showLogs ? 'bg-slate-900 text-white border-slate-900' : 'bg-slate-50 text-slate-400 border-slate-100'}`}
+                >
+                  <Terminal size={20} />
+                </button>
+                 <button 
                   onClick={handleForceCloudRestore}
                   disabled={isOverwriting || isSyncing}
                   className="p-3 bg-red-50 text-red-500 rounded-2xl border border-red-100 shadow-sm flex items-center justify-center active:scale-90 transition-all disabled:opacity-30"
-                  title="從 AppData 強制恢復"
                 >
                   <CloudDownload size={20} />
-                </button>
-                <button 
-                  onClick={() => window.location.reload()} 
-                  className="p-3 bg-slate-50 text-[#34DA4F] rounded-2xl border border-slate-100 shadow-sm flex items-center justify-center active:scale-90 transition-all"
-                >
-                  <RefreshCw size={20} />
                 </button>
               </div>
            </div>
 
-           {isOverwriting && (
-             <div className="flex items-center gap-2 text-red-500 bg-red-50/50 p-4 rounded-2xl border border-red-50 animate-pulse">
-                <AlertCircle size={16} />
-                <span className="text-[10px] font-black">正在從 AppData 私有空間重建資料庫...</span>
+           {/* 日誌主控台 */}
+           {showLogs && (
+             <div className="bg-slate-900 rounded-2xl p-4 font-mono text-[10px] leading-relaxed max-h-[300px] overflow-y-auto custom-scrollbar border border-slate-800 shadow-inner">
+                <div className="flex items-center gap-2 text-[#34DA4F] mb-3 pb-2 border-b border-white/10 opacity-80">
+                   <div className="w-2 h-2 rounded-full bg-[#34DA4F] animate-pulse" />
+                   <span className="font-black uppercase tracking-widest">Real-time Sync Log</span>
+                </div>
+                {syncLogs.length === 0 ? (
+                   <p className="text-slate-500 italic">尚未產生診斷日誌...</p>
+                ) : (
+                   <div className="flex flex-col gap-1.5">
+                      {syncLogs.map((log, i) => (
+                        <p key={i} className={log.includes("❌") || log.includes("🔥") ? "text-red-400" : log.includes("✅") ? "text-[#34DA4F]" : "text-slate-300"}>
+                          {log}
+                        </p>
+                      ))}
+                      <div ref={logEndRef} />
+                   </div>
+                )}
              </div>
            )}
            
            <div className="space-y-3 pt-2 border-t border-slate-50 relative z-10 text-[10px] font-bold">
               <div className="flex justify-between items-center text-slate-400">
-                <span className="flex items-center gap-1.5"><EyeOff size={12} className="text-[#34DA4F]" /> HIDDEN (PRIMARY)</span>
+                <span className="flex items-center gap-1.5"><EyeOff size={12} className="text-[#34DA4F]" /> HIDDEN ID</span>
                 <span onClick={() => cloudFileIds.hidden && copyToClipboard(cloudFileIds.hidden)} className="font-mono cursor-pointer truncate max-w-[140px] text-slate-300 hover:text-slate-500">{cloudFileIds.hidden || "對齊中..."}</span>
               </div>
               <div className="flex justify-between items-center text-slate-400">
-                <span className="flex items-center gap-1.5"><Database size={12} /> VISIBLE (MIRROR)</span>
-                <span onClick={() => cloudFileIds.visible && copyToClipboard(cloudFileIds.visible)} className="font-mono cursor-pointer truncate max-w-[140px] text-slate-300 hover:text-slate-500">{cloudFileIds.visible || "建立中..."}</span>
+                <span className="flex items-center gap-1.5"><Code size={12} /> DEVICE UID</span>
+                <span className="font-mono text-slate-200">{user?.uid ? `${user.uid.slice(0, 6)}...${user.uid.slice(-4)}` : "連結中..."}</span>
               </div>
+           </div>
+
+           <div className="flex items-start gap-2 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+              <Info size={16} className="text-[#34DA4F] shrink-0 mt-0.5" />
+              <p className="text-[10px] text-slate-400 font-bold leading-normal italic">
+                如果您無法同步，請展開終端機圖示將執行日誌截圖傳給開發團隊，我們能精準鎖定加密金鑰或雲端搜尋是否異常。
+              </p>
            </div>
         </section>
 
@@ -197,7 +228,6 @@ export default function SettingsPage() {
             <Store size={14} /> 商家餘額與管理
           </h3>
           <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col gap-6">
-            
             <div className="flex gap-2">
               <input 
                 type="text" 
@@ -213,7 +243,6 @@ export default function SettingsPage() {
                 <Plus size={20} />
               </button>
             </div>
-
             <div className="flex flex-col gap-2">
                {merchantStats.length === 0 ? (
                  <p className="text-center py-4 text-xs text-slate-300 font-bold uppercase tracking-widest">尚無商家資料</p>
@@ -269,7 +298,6 @@ export default function SettingsPage() {
               </div>
               <ChevronRight size={20} className="text-slate-200" />
            </button>
-           
            <button onClick={handleLogout} className="w-full bg-white text-slate-400 py-6 rounded-[2.2rem] font-black flex items-center justify-center gap-2 border border-slate-100 shadow-sm hover:text-red-500 hover:bg-red-50 hover:border-red-100 transition-all active:scale-[0.98]">
              <LogOut size={20} /> 登出帳號
            </button>

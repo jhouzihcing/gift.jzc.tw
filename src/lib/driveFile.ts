@@ -1,7 +1,7 @@
 import { encryptDB, decryptDB } from "./crypto";
 
 export const VISIBLE_FILENAME = "zj-card-sync.json";
-export const PRIVATE_FILENAME = "zj-card-private-sync.json"; // v2.18.0 新增隱藏空間專用名
+export const PRIVATE_FILENAME = "zj-card-private-sync.json"; 
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
@@ -35,39 +35,72 @@ const emptyDB = (): DriveDB => ({
 });
 
 /**
- * 搜尋或建立資料檔案 (v2.18.0 支援雙空間與絕對校驗)
+ * 偵測隱藏空間中的所有檔案 (Nuclear Search Debug)
+ */
+export async function listAllAppDataFiles(token: string): Promise<{ id: string, name: string, modifiedTime: string }[]> {
+  const res = await fetch(
+    `${DRIVE_API}/files?fields=files(id,name,modifiedTime)&spaces=appDataFolder&t=${Date.now()}`,
+    { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
+  );
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.files || [];
+}
+
+/**
+ * 搜尋或建立資料檔案 (v2.19.0 診斷加強版)
  */
 export async function getOrCreateDriveFile(
   token: string, 
   uid: string,
-  space: 'drive' | 'appDataFolder' = 'drive'
+  space: 'drive' | 'appDataFolder' = 'drive',
+  logFn?: (msg: string) => void
 ): Promise<string> {
   const fileName = space === 'drive' ? VISIBLE_FILENAME : PRIVATE_FILENAME;
   const q = `name='${fileName}' and trashed=false`;
   
+  logFn?.(`🔍 正在 ${space} 搜尋檔案: ${fileName}...`);
+
   let attempts = 0;
   while (attempts < 2) {
     const res = await fetch(
       `${DRIVE_API}/files?q=${encodeURIComponent(q)}&fields=files(id,modifiedTime)&spaces=${space}&t=${Date.now()}`,
       { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
     );
-    if (!res.ok) throw new Error(`Search failed in ${space}`);
+    if (!res.ok) {
+      logFn?.(`❌ 搜尋失敗 (HTTP ${res.status})`);
+      throw new Error(`Search failed in ${space}`);
+    }
     const data = await res.json();
 
     if (data.files && data.files.length > 0) {
       const sorted = data.files.sort((a: any, b: any) => 
         new Date(b.modifiedTime).getTime() - new Date(a.modifiedTime).getTime()
       );
+      logFn?.(`✅ 找到 ${sorted.length} 個同名檔案，鎖定 ID: ${sorted[0].id}`);
       return sorted[0].id;
     }
 
     attempts++;
     if (attempts < 2) {
+      logFn?.(`⏳ 未發現檔案，1.5秒後重試搜尋...`);
       await new Promise(resolve => setTimeout(resolve, 1500));
     }
   }
 
-  // 若沒影，則建立
+  // Nuclear Search: 如果是隱藏空間且搜尋不到特定檔名，檢索該空間所有檔案
+  if (space === 'appDataFolder') {
+    logFn?.(`⚠️ 常規搜尋失敗，啟動全域掃描 (Nuclear Search)...`);
+    const allFiles = await listAllAppDataFiles(token);
+    if (allFiles.length > 0) {
+      logFn?.(`📢 全域發現 ${allFiles.length} 個隱藏檔案，但無一匹配目標名。`);
+      allFiles.forEach(f => logFn?.(`  - [${f.name}] ID: ${f.id}`));
+    } else {
+      logFn?.(`📢 隱藏空間空空如也，確定曾有資料？`);
+    }
+  }
+
+  logFn?.(`🆕 確定無現有檔案，正在建立新同步檔...`);
   const encrypted = await encryptDB(emptyDB(), uid);
   const metadata: any = { 
     name: fileName, 
@@ -91,29 +124,44 @@ export async function getOrCreateDriveFile(
   });
   if (!createRes.ok) throw new Error(`Create failed in ${space}`);
   const created = await createRes.json();
+  logFn?.(`✨ 新檔案建立成功！ID: ${created.id}`);
   return created.id;
 }
 
 /**
- * 讀取資料
+ * 讀取資料 (v2.19.0 診斷版)
  */
 export async function readDriveDB(
   token: string,
   fileId: string,
-  uid: string
+  uid: string,
+  logFn?: (msg: string) => void
 ): Promise<{ db: DriveDB }> {
+  logFn?.(`📡 正在從雲端抓取原始數據 (ID: ${fileId})...`);
   const res = await fetch(`${DRIVE_API}/files/${fileId}?alt=media&t=${Date.now()}`, {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
   });
-  if (!res.ok) throw new Error(`Read failed: ${res.status}`);
+  if (!res.ok) {
+    logFn?.(`❌ 雲端抓取失敗 (HTTP ${res.status})`);
+    throw new Error(`Read failed: ${res.status}`);
+  }
 
   const ciphertext = await res.text();
+  logFn?.(`🗳️ 數據抓取完畢，大小: ${ciphertext.length} 位元組`);
 
-  if (ciphertext.trimStart().startsWith("{")) {
-    return { db: JSON.parse(ciphertext) as DriveDB };
+  try {
+    if (ciphertext.trimStart().startsWith("{")) {
+      logFn?.(`🔓 此為明文 JSON，直接解析成功。`);
+      return { db: JSON.parse(ciphertext) as DriveDB };
+    }
+    const decrypted = await decryptDB(ciphertext, uid);
+    logFn?.(`🔓 加密數據解密成功，內含 ${decrypted.cards.length} 張卡片。`);
+    return { db: decrypted };
+  } catch (e: any) {
+    logFn?.(`🔥 解密失敗！請檢查 UID 是否與原設備一致。錯誤: ${e.message}`);
+    throw e;
   }
-  return { db: await decryptDB(ciphertext, uid) };
 }
 
 /**
@@ -123,8 +171,10 @@ export async function writeDriveDB(
   token: string,
   fileId: string,
   db: DriveDB,
-  uid: string
+  uid: string,
+  logFn?: (msg: string) => void
 ): Promise<void> {
+  logFn?.(`🚀 正在加密並寫入雲端... (ID: ${fileId})`);
   const encrypted = await encryptDB({ ...db, lastModified: Date.now() }, uid);
   const res = await fetch(`${UPLOAD_API}/files/${fileId}?uploadType=media`, {
     method: "PATCH",
@@ -134,7 +184,11 @@ export async function writeDriveDB(
     },
     body: encrypted,
   });
-  if (!res.ok) throw new Error(`Write failed: ${res.status}`);
+  if (!res.ok) {
+    logFn?.(`❌ 雲端寫入失敗 (HTTP ${res.status})`);
+    throw new Error(`Write failed: ${res.status}`);
+  }
+  logFn?.(`✅ 雲端寫入成功。`);
 }
 
 export function cleanupTrash(db: DriveDB): { db: DriveDB; changed: boolean } {

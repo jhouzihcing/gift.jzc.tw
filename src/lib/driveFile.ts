@@ -1,7 +1,8 @@
 import { encryptDB, decryptDB } from "./crypto";
 
-const VISIBLE_FILENAME = "zj-card-sync.json";
-const OLD_VISIBLE_FILENAME = "zc-card 請勿刪除·此為禮物卡檔案.json";
+export const VISIBLE_FILENAME = "zj-card-sync.json";
+export const PRIVATE_FILENAME = "zj-card-private-sync.json"; // v2.18.0 新增隱藏空間專用名
+
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
 
@@ -34,47 +35,50 @@ const emptyDB = (): DriveDB => ({
 });
 
 /**
- * 搜尋或建立資料檔案 (v2.17.0 絕對校驗版)
- * 策略：搜尋所有同名檔案，並選取「最後修改時間」最新的一個，解決多設備衝突。
+ * 搜尋或建立資料檔案 (v2.18.0 支援雙空間與絕對校驗)
  */
 export async function getOrCreateDriveFile(
   token: string, 
-  uid: string
+  uid: string,
+  space: 'drive' | 'appDataFolder' = 'drive'
 ): Promise<string> {
-  const q = `name='${VISIBLE_FILENAME}' and trashed=false`;
+  const fileName = space === 'drive' ? VISIBLE_FILENAME : PRIVATE_FILENAME;
+  const q = `name='${fileName}' and trashed=false`;
   
   let attempts = 0;
   while (attempts < 2) {
-    // 請求 id 與 modifiedTime
     const res = await fetch(
-      `${DRIVE_API}/files?q=${encodeURIComponent(q)}&fields=files(id,modifiedTime)&spaces=drive&t=${Date.now()}`,
+      `${DRIVE_API}/files?q=${encodeURIComponent(q)}&fields=files(id,modifiedTime)&spaces=${space}&t=${Date.now()}`,
       { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
     );
-    if (!res.ok) throw new Error(`Search failed`);
+    if (!res.ok) throw new Error(`Search failed in ${space}`);
     const data = await res.json();
 
     if (data.files && data.files.length > 0) {
-      // v2.17.0: 按修改時間降序排列，取第一個（最新）
       const sorted = data.files.sort((a: any, b: any) => 
         new Date(b.modifiedTime).getTime() - new Date(a.modifiedTime).getTime()
       );
-      console.log(`[Drive] 偵測到 ${sorted.length} 個同步檔，已鎖定最新版本：${sorted[0].id}`);
       return sorted[0].id;
     }
 
     attempts++;
     if (attempts < 2) {
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 1500));
     }
   }
 
-  // 建立新檔案
+  // 若沒影，則建立
   const encrypted = await encryptDB(emptyDB(), uid);
-  const metadata = { 
-    name: VISIBLE_FILENAME, 
+  const metadata: any = { 
+    name: fileName, 
     mimeType: "text/plain",
-    parents: ['root'] 
   };
+  
+  if (space === 'drive') {
+    metadata.parents = ['root'];
+  } else {
+    metadata.parents = ['appDataFolder'];
+  }
 
   const form = new FormData();
   form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
@@ -85,13 +89,13 @@ export async function getOrCreateDriveFile(
     headers: { Authorization: `Bearer ${token}` },
     body: form,
   });
-  if (!createRes.ok) throw new Error(`Create failed`);
+  if (!createRes.ok) throw new Error(`Create failed in ${space}`);
   const created = await createRes.json();
   return created.id;
 }
 
 /**
- * 讀取資料庫
+ * 讀取資料
  */
 export async function readDriveDB(
   token: string,
@@ -113,7 +117,7 @@ export async function readDriveDB(
 }
 
 /**
- * 寫入資料庫
+ * 寫入資料
  */
 export async function writeDriveDB(
   token: string,
@@ -130,32 +134,7 @@ export async function writeDriveDB(
     },
     body: encrypted,
   });
-  if (!res.ok) {
-    throw new Error(`Write failed: ${res.status}`);
-  }
-}
-
-/**
- * 舊檔遷移
- */
-export async function migrateOldVisibleFile(token: string): Promise<void> {
-  try {
-    const q = `name='${OLD_VISIBLE_FILENAME}' and trashed=false`;
-    const res = await fetch(
-      `${DRIVE_API}/files?q=${encodeURIComponent(q)}&fields=files(id)&spaces=drive&t=${Date.now()}`,
-      { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
-    );
-    if (!res.ok) return;
-    const data = await res.json();
-    if (data.files?.length > 0) {
-      const oldFileId = data.files[0].id;
-      await fetch(`${DRIVE_API}/files/${oldFileId}`, {
-        method: "PATCH",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ name: VISIBLE_FILENAME }),
-      });
-    }
-  } catch {}
+  if (!res.ok) throw new Error(`Write failed: ${res.status}`);
 }
 
 export function cleanupTrash(db: DriveDB): { db: DriveDB; changed: boolean } {

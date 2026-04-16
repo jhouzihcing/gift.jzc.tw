@@ -1,10 +1,10 @@
 /**
- * useDriveSync — v2.16.0 同步純淨版 (Sync Purist Edition)
+ * useDriveSync — v2.18.0 重心轉移版 (Hidden Residency Edition)
  *
  * 設計原則：
- * 1. 顯性唯一 (Visible Only)：移除所有隱藏空間邏輯，確保只有一個真實檔案。
- * 2. 緩衝搜尋：增加重試延遲，解決多裝置同時啟動時的檔案重複問題。
- * 3. 穩定讀寫：優先保證根目錄資料的正確性與跨裝置可見度。
+ * 1. AppData 唯一真理：隱藏空間為主要讀取來源，解決跨裝置搜尋不到檔案的問題。
+ * 2. 顯性鏡像備份：同時寫入根目錄可見檔案，方便使用者手動查看。
+ * 3. 單向遷移：若隱藏空間為空但顯性空間有資料，自動執行一次性遷移。
  */
 
 import { useEffect, useRef, useCallback } from "react";
@@ -15,7 +15,6 @@ import {
   readDriveDB,
   writeDriveDB,
   cleanupTrash,
-  migrateOldVisibleFile,
 } from "@/lib/driveFile";
 
 const MAX_BACKOFF_MS = 60_000;
@@ -36,14 +35,16 @@ export function useDriveSync() {
     setCloudFileIds,
   } = useCardStore();
 
-  const fileIdRef      = useRef<string | null>(null);
+  const hiddenIdRef    = useRef<string | null>(null);
+  const visibleIdRef   = useRef<string | null>(null);
   const retryCountRef  = useRef(0);
   const retryTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const workerBusyRef  = useRef(false);
 
+  // 雙發寫入 (Double-Write)
   const processQueue = useCallback(async () => {
     if (workerBusyRef.current || syncQueue.length === 0) return;
-    if (!fileIdRef.current || !user?.driveToken || !user?.uid) return;
+    if (!hiddenIdRef.current || !user?.driveToken || !user?.uid) return;
 
     workerBusyRef.current = true;
     setGlobalSyncing(true);
@@ -53,7 +54,6 @@ export function useDriveSync() {
     const batchCards = storeCards.filter(c => batchIds.includes(c.id));
     
     try {
-      // ⚡ 第 1 步：極速模式 - 直接嘗試寫入 (Blind Write)
       const currentDB = {
         version: 1,
         lastModified: Date.now(),
@@ -61,40 +61,23 @@ export function useDriveSync() {
         customMerchants: useCardStore.getState().customMerchants,
       };
 
-      try {
-        await writeDriveDB(user.driveToken, fileIdRef.current, currentDB, user.uid);
-      } catch (writeErr: any) {
-        // 🛡️ 如果發生衝突 (412)，降級為安全模式 (Read-Merge-Write)
-        if (writeErr.message?.includes("412") || writeErr.message?.includes("404")) {
-          console.warn("[Sync] 寫入衝突或檔案丟失，嘗試恢復...");
-          // 若是 404，重新搜尋 ID
-          if (writeErr.message?.includes("404")) {
-            fileIdRef.current = await getOrCreateDriveFile(user.driveToken, user.uid);
-            setCloudFileIds({ visible: fileIdRef.current, hidden: null });
-          }
-
-          const { db: remoteDb } = await readDriveDB(user.driveToken, fileIdRef.current!, user.uid);
-          
-          for (const localCard of batchCards) {
-             const { isSynced: _, ...cardData } = localCard as any;
-             const idx = remoteDb.cards.findIndex(c => c.id === cardData.id);
-             if (idx !== -1) remoteDb.cards[idx] = cardData;
-             else remoteDb.cards.push(cardData);
-          }
-          await writeDriveDB(user.driveToken, fileIdRef.current!, remoteDb, user.uid);
-        } else {
-          throw writeErr;
-        }
+      // ⚡ 優先寫入隱藏空間 (Primary Source)
+      await writeDriveDB(user.driveToken, hiddenIdRef.current, currentDB, user.uid);
+      
+      // ⚡ 背景寫入顯性空間 (Mirror Backup)
+      if (visibleIdRef.current) {
+        writeDriveDB(user.driveToken, visibleIdRef.current, currentDB, user.uid).catch(e => {
+          console.warn("[Sync] 顯性鏡像寫入失敗 (非致命):", e.message);
+        });
       }
 
-      // 🎉 成功：清理佇列與標記
       removeFromQueue(batchIds);
       batchIds.forEach(id => markCardSynced(id, true));
       
       setSyncStatus(false, Date.now());
       setSyncError(false);
       retryCountRef.current = 0;
-      console.log(`[Sync] v2.16.0 顯性同步完成 (${batchIds.length} 張)`);
+      console.log(`[Sync] v2.18.0 AppData 同步成功 (${batchIds.length} 張)`);
 
     } catch (e: any) {
       console.error("[Sync] ❌ 同步失敗:", e.message || e);
@@ -116,9 +99,9 @@ export function useDriveSync() {
         setTimeout(() => processQueue(), 100);
       }
     }
-  }, [user?.driveToken, user?.uid, syncQueue, storeCards, setGlobalSyncing, removeFromQueue, markCardSynced, setSyncStatus, setSyncError, setCloudFileIds]);
+  }, [user?.driveToken, user?.uid, syncQueue, storeCards, setGlobalSyncing, removeFromQueue, markCardSynced, setSyncStatus, setSyncError]);
 
-  // ─── 初始化邏輯 (單軌強化版) ──────────────────────────
+  // ─── 初始化邏輯 (AppData 優先 + 顯性遷移) ──────────────────────────
   useEffect(() => {
     if (!user?.driveToken) return;
 
@@ -126,16 +109,36 @@ export function useDriveSync() {
       setSyncStatus(true, null);
       try {
         await (useCardStore.persist as any).rehydrate();
-        await migrateOldVisibleFile(user.driveToken!);
         
-        // 1. 取得或搜尋唯一的顯性檔案
-        const fileId = await getOrCreateDriveFile(user.driveToken!, user.uid);
-        fileIdRef.current = fileId;
-        setCloudFileIds({ visible: fileId, hidden: null });
+        // 1. 同時獲取兩個空間的 ID
+        const [hid, vid] = await Promise.all([
+          getOrCreateDriveFile(user.driveToken!, user.uid, 'appDataFolder'),
+          getOrCreateDriveFile(user.driveToken!, user.uid, 'drive')
+        ]);
+        
+        hiddenIdRef.current = hid;
+        visibleIdRef.current = vid;
+        setCloudFileIds({ visible: vid, hidden: hid });
 
-        // 2. 獲取資料並進行 Read-Merge
-        const { db } = await readDriveDB(user.driveToken!, fileId, user.uid);
-        const { db: cleanedDb, changed } = cleanupTrash(db);
+        // 2. 獲取資料
+        let primarySource = await readDriveDB(user.driveToken!, hid, user.uid);
+        
+        // 🚀 遷移邏輯：如果 AppData 是空的（剛轉移版本），但顯性空間有資料，則執行遷移
+        if (primarySource.db.cards.length === 0) {
+          try {
+            const legacySource = await readDriveDB(user.driveToken!, vid, user.uid);
+            if (legacySource.db.cards.length > 0) {
+              console.log("[Sync] 偵測到顯性舊資料，正在執行單向遷移至 AppData...");
+              primarySource = legacySource;
+              // 立即同步回 AppData
+              await writeDriveDB(user.driveToken!, hid, primarySource.db, user.uid);
+            }
+          } catch (e) {
+            console.warn("[Sync] 顯性遷移讀取失敗 (可能無檔案):", e);
+          }
+        }
+
+        const { db: cleanedDb, changed } = cleanupTrash(primarySource.db);
 
         const localCards = useCardStore.getState().cards;
         const cardMap = new Map<string, any>();
@@ -148,11 +151,11 @@ export function useDriveSync() {
         }
 
         if (changed) {
-          await writeDriveDB(user.driveToken!, fileId, cleanedDb, user.uid);
+          await writeDriveDB(user.driveToken!, hid, cleanedDb, user.uid);
         }
 
         setSyncStatus(false, Date.now());
-        console.log("[Sync] v2.16.0 🏁 初始化校對完成。");
+        console.log("[Sync] v2.18.0 AppData 初始化校對完成。");
       } catch (err: any) {
         console.error("[Sync] ⚠️ 初始化校對失敗:", err.message || err);
         setSyncStatus(false, null);
@@ -166,7 +169,7 @@ export function useDriveSync() {
   }, [user?.driveToken]);
 
   useEffect(() => {
-    if (isInitialized && fileIdRef.current && syncQueue.length > 0) {
+    if (isInitialized && hiddenIdRef.current && syncQueue.length > 0) {
       processQueue();
     }
   }, [syncQueue, isInitialized, processQueue]);

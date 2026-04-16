@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useScanner } from "@/hooks/useScanner";
 import ScannerOverlay from "@/components/ScannerOverlay";
 import { useCardStore } from "@/store/useCardStore";
-import { ScanLine, ChevronLeft, Layers, Minus, Plus } from "lucide-react";
+import { ScanLine, ChevronLeft, Layers, Minus, Plus, Lock } from "lucide-react";
 import { SCANNER_PROFILES } from "@/constants/scannerProfiles";
 
 export default function ScanPage() {
@@ -35,11 +35,15 @@ export default function ScanPage() {
     skipSecondary 
   } = useScanner("reader-video", activeProfile);
   
-  // 初始化模式偏好
+  // v2.29.0 初始化模式偏好：預設為開啟 (dual)
   useEffect(() => {
     const savedMode = localStorage.getItem("sgcm-scan-mode");
-    if (savedMode === "dual") setIsDualMode(true);
-    else if (savedMode === "single") setIsDualMode(false);
+    if (savedMode === "single") {
+      setIsDualMode(false);
+    } else {
+      // 預設 (null) 或手動設定為 dual 均開啟
+      setIsDualMode(true);
+    }
   }, [setIsDualMode]);
 
   const handleStart = () => {
@@ -56,10 +60,8 @@ export default function ScanPage() {
 
   const handleMerchantChange = (m: string) => {
     if (m === "其它自訂") {
-      setIsCustomMode(true);
-      setMerchant("");
-      // 切換到自訂時，通常預設關閉雙模式（除非手動開啟）
-      setIsDualMode(false);
+       // v2.29.0 暫時鎖定該路徑 (雖然按鈕已 disabled，此處為保險)
+       return;
     } else {
       setIsCustomMode(false);
       setMerchant(m);
@@ -182,11 +184,12 @@ export default function ScanPage() {
                     </button>
                   ))}
 
+                  {/* v2.29.0 鎖定按鈕 */}
                   <button
-                    onClick={() => handleMerchantChange("其它自訂")}
-                    className={`shrink-0 px-6 py-4 rounded-[1.5rem] font-black transition-all snap-start border-2 text-sm ${isCustomMode ? 'bg-slate-900 text-[#34DA4F] border-slate-900 shadow-xl' : 'bg-white text-slate-400 border-slate-100'}`}
+                    disabled
+                    className="shrink-0 px-6 py-4 rounded-[1.5rem] font-black transition-all snap-start border-2 border-dashed border-slate-200 text-slate-300 text-[10px] flex items-center gap-1.5 opacity-60 cursor-not-allowed"
                   >
-                    <Plus size={16} />
+                    <Lock size={12} /> 自訂商家 (待開發)
                   </button>
                 </div>
 

@@ -8,7 +8,7 @@ import { signOut } from "next-auth/react";
 import { 
   ChevronLeft, LogOut, Trash2, Plus, Store, RotateCcw, 
   RefreshCw, ShieldCheck, ChevronRight, CheckCircle2, 
-  Terminal, AlertTriangle, Zap, Trash
+  Terminal, AlertTriangle, Zap, Trash, Lock
 } from "lucide-react";
 import { VERSION } from "@/constants/version";
 import { deleteDriveFile } from "@/lib/driveFile";
@@ -35,8 +35,14 @@ export default function SettingsPage() {
     }
   }, [syncLogs, showLogs]);
 
+  /** 
+   * v2.29.0 商家統計優化
+   * 1. 確保 7-11 始終置頂
+   * 2. 如果沒有 7-11 卡片，也顯示一個 0 元的 7-11
+   */
   const merchantStats = useMemo(() => {
-    const stats: Record<string, number> = {};
+    const stats: Record<string, number> = { "7-11": 0 };
+    
     activeCards.forEach(card => {
       stats[card.merchant] = (stats[card.merchant] || 0) + card.amount;
     });
@@ -45,7 +51,11 @@ export default function SettingsPage() {
       if (!(m in stats)) stats[m] = 0;
     });
 
-    return Object.entries(stats).sort((a, b) => b[1] - a[1]);
+    return Object.entries(stats).sort(([nameA], [nameB]) => {
+      if (nameA === "7-11") return -1;
+      if (nameB === "7-11") return 1;
+      return nameA.localeCompare(nameB);
+    });
   }, [activeCards, customMerchants]);
 
   const totalBalance = useMemo(() => {
@@ -53,9 +63,8 @@ export default function SettingsPage() {
   }, [activeCards]);
 
   const handleAddMerchant = () => {
-    if (!newMerchant.trim()) return;
-    addCustomMerchant(newMerchant.trim());
-    setNewMerchant("");
+    // v2.29.0 暫時鎖定
+    return;
   };
 
   const handleLogout = async () => {
@@ -202,41 +211,47 @@ export default function SettingsPage() {
            </div>
         </section>
 
-        {/* 商家管理 */}
+        {/* 商家管理 (v2.29.0 Lockdown) */}
         <section>
           <h3 className="text-xs font-black text-slate-400 mb-3 px-2 flex items-center gap-2 uppercase tracking-widest leading-none">
             <Store size={14} /> 商家餘額與管理
           </h3>
           <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col gap-6">
-            <div className="flex gap-2">
-              <input 
-                type="text" 
-                placeholder="新增自訂商家..." 
-                value={newMerchant}
-                onChange={(e) => setNewMerchant(e.target.value)}
-                className="flex-1 bg-slate-50 border border-slate-200 rounded-[1.2rem] px-4 py-3 text-sm font-bold outline-none focus:border-[#34DA4F] transition-all"
-              />
-              <button 
-                onClick={handleAddMerchant}
-                className="bg-slate-800 text-[#34DA4F] px-5 rounded-[1.2rem] font-black active:scale-95 transition-all flex items-center justify-center"
-              >
-                <Plus size={20} />
-              </button>
+            <div className="relative group">
+              <div className="flex gap-2 opacity-50 pointer-events-none grayscale">
+                <input 
+                  type="text" 
+                  disabled
+                  placeholder="自訂商家功能 (待開發)..." 
+                  className="flex-1 bg-slate-50 border border-slate-200 rounded-[1.2rem] px-4 py-3 text-sm font-bold outline-none"
+                />
+                <button 
+                  disabled
+                  className="bg-slate-800 text-[#34DA4F] px-5 rounded-[1.2rem] font-black flex items-center justify-center"
+                >
+                  <Plus size={20} />
+                </button>
+              </div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                 <div className="bg-slate-900/80 backdrop-blur-sm px-4 py-2 rounded-xl border border-slate-700 flex items-center gap-2 shadow-2xl">
+                    <Lock size={14} className="text-[#34DA4F]" />
+                    <span className="text-[10px] font-black text-white uppercase tracking-widest">自訂商家功能待開發中</span>
+                 </div>
+              </div>
             </div>
+
             <div className="flex flex-col gap-2">
-               {merchantStats.length === 0 ? (
-                 <p className="text-center py-4 text-xs text-slate-300 font-bold uppercase tracking-widest">尚無商家資料</p>
-               ) : (
-                 merchantStats.map(([name, amount]) => (
-                    <div key={name} className="flex justify-between items-center py-4 px-5 bg-slate-50/50 rounded-2xl border border-slate-50">
-                       <span className="font-black text-slate-600 text-sm">{name}</span>
-                       <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] font-black text-[#34DA4F]">$</span>
-                          <span className="font-black text-slate-800 text-base">{amount.toLocaleString()}</span>
-                       </div>
-                    </div>
-                 ))
-               )}
+               {merchantStats.map(([name, amount]) => (
+                  <div key={name} className={`flex justify-between items-center py-4 px-5 rounded-2xl border ${name === "7-11" ? "bg-slate-900 border-slate-900 shadow-lg" : "bg-slate-50/50 border-slate-50"}`}>
+                     <span className={`font-black text-sm ${name === "7-11" ? "text-[#34DA4F]" : "text-slate-600"}`}>
+                       {name} {name === "7-11" && " (主要)"}
+                     </span>
+                     <div className="flex items-center gap-1.5">
+                        <span className={`text-[10px] font-black ${name === "7-11" ? "text-[#34DA4F]" : "text-[#34DA4F]/60"}`}>$</span>
+                        <span className={`font-black text-base ${name === "7-11" ? "text-white" : "text-slate-800"}`}>{amount.toLocaleString()}</span>
+                     </div>
+                  </div>
+               ))}
             </div>
           </div>
         </section>

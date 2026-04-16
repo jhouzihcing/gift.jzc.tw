@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ShieldCheck, Database, Code, AlertTriangle, Globe, Lock, Share2, Trash2, Gavel, HeartHandshake, Eye, ShieldAlert, Copyright, Github, ExternalLink } from "lucide-react";
+import { ChevronLeft, ShieldCheck, Database, Code, AlertTriangle, Globe, Lock, Share2, Trash2, Gavel, HeartHandshake, Eye, ShieldAlert, Copyright, ExternalLink } from "lucide-react";
 import Link from "next/link";
 
 /**
@@ -54,7 +54,7 @@ export default function PrivacyPage() {
                        target="_blank"
                        className="flex items-center justify-center gap-2 bg-slate-900 text-white px-5 py-3 rounded-2xl font-black text-sm hover:scale-[1.02] active:scale-95 transition-all shadow-lg shadow-slate-200"
                      >
-                        <Github size={18} />
+                        <Code size={18} />
                         開源專案程式碼 (GitHub)
                         <ExternalLink size={14} className="opacity-50" />
                      </Link>

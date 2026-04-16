@@ -1,5 +1,9 @@
 # 更新日誌 (Changelog)
 
+## [2.30.1] - 2026-04-16
+### 🩹 部署修復 (Hotfix)
+- **修復 Lucide 圖示引用**：修正了 Vercel 部署時出現的 `Github` 圖示引用錯誤（對應舊版 lucide-react 改用 `Code` 圖示），確保線上版本能順利建置。
+
 ## [2.30.0] - 2026-04-16
 ### 📂 開源透明化與無用資產清理 (Open Source & Cleanup)
 - **程式碼公開**：在隱私權頁面中補上 GitHub 開源專案連結 ([gift.jzc.tw](https://github.com/jhouzihcing/gift.jzc.tw))，強化專案透明度與信任感。

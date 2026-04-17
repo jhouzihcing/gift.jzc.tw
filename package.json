@@ -14,7 +14,7 @@
     "clsx": "^2.1.1",
     "html5-qrcode": "^2.3.8",
     "lucide-react": "^1.8.0",
-    "next": "15.1.9",
+    "next": "15.5.15",
     "next-auth": "5.0.0-beta.25",
     "next-pwa": "^5.6.0",
     "react": "19.0.0",

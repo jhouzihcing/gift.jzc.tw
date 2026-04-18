@@ -1,5 +1,16 @@
 # 更新日誌 (Changelog)
 
+## [2.31.0] - 2026-04-18
+### 🛡️ 資安頂級強化與供應鏈防禦 (Security Hardening)
+- **核心框架升級**：將 Next.js 升級至 v15.5.8，修補高風險 SSRF 與原始碼洩漏漏洞，提升運行環境安全性。
+- **工作流權限收緊**：全面優化 GitHub Actions 權限，導入最小權限原則 (Zero-Trust Permissions)，防止 Token 濫用。
+- **供應鏈安全固化**：將所有 CI/CD Actions 版本由滾動標籤 (Tag) 改為不可變的雜湊值 (Commit SHA)，徹底杜絕供應鏈攻擊。
+- **導入 CodeQL 靜態掃描**：整合 GitHub 官方 SAST 工具，針對每一輪開發進行自動化漏洞分析。
+- **自動化補丁監測**：配置 Dependabot 每週自動監控依賴項安全更新。
+- **導入 Vitest 自動化測試**：建立全方位的單位測試架構，針對核心加密模組 (`crypto.ts`) 進行邊界測試，顯著提升系統穩健性 (Robustness)。
+- **自動化測試工作流 (CI)**：新增 GitHub Actions CI 流程，確保每次推送與 PR 皆通過完整測試，解決 Scorecard 中關於「模糊測試 (Fuzzing)」的替代優化建議。
+- **治理文件完備化**：新增 MIT 授權、安全性政策 (SECURITY.md) 及程式碼審查規則 (CODEOWNERS)，提升專案合規性與維護品質。
+
 ## [2.30.1] - 2026-04-16
 ### 🩹 部署修復 (Hotfix)
 - **修復 Lucide 圖示引用**：修正了 Vercel 部署時出現的 `Github` 圖示引用錯誤（對應舊版 lucide-react 改用 `Code` 圖示），確保線上版本能順利建置。

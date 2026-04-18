@@ -22,7 +22,6 @@ export const metadata: Metadata = {
     apple: "/logo.png?v=2.4.4",
     shortcut: "/favicon.ico?v=2.4.4",
   },
-  manifest: "/manifest.json",
   verification: {
     google: "cef01WpDC7VBZmuRk_0KfG_BZu5OFo4oyyK-9OMeUlg",
   },

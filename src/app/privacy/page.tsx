@@ -40,7 +40,7 @@ export default function PrivacyPage() {
           <div className="flex flex-col gap-12">
             
             <section className="space-y-4 text-center md:text-left">
-               <h2 className="text-4xl font-black text-slate-900 leading-tight">ZJ Card 禮物卡管家</h2>
+               <h2 className="text-4xl font-black text-slate-900 leading-tight">ZJ Card 奇蹟卡</h2>
                <div className="p-6 bg-[#34DA4F]/5 rounded-[2rem] border border-[#34DA4F]/10 space-y-4">
                   <p className="text-[#1A8A2A] font-black text-base leading-relaxed">
                      本程式為「完全免費、開源且不盈利」之公益專案。

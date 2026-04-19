@@ -82,6 +82,12 @@ cosign verify-blob source.tar.gz \
 
 - **LINE 官方帳號**：[點擊加入好友](https://line.me/R/ti/p/@300dqnfz) (或搜尋 `@300dqnfz`)
 
+## ⚠️ 版權聲明 (Legal Notice)
+本專案的原始碼以 **MIT License** 授權開源。然而，**"ZJ Card" 品牌名稱、專案標誌 (Logo) 以及 UI/UX 視覺設計**之相關智慧財產權，皆歸原作者 ([JZC Design](https://jzc.tw)) 所有。
+
+- 您可以自由分叉 (Fork) 並修改程式碼供個人或非商業使用。
+- **未經正式授權，禁止將本專案之標誌、品牌名稱或視覺設計用於任何商業行為、營利目的或誤導性的衍生專案。**
+
 ---
 <div align="center">
 Made with ❤️ by JZC Design

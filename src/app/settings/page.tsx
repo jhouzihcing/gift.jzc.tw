@@ -8,7 +8,7 @@ import { signOut } from "next-auth/react";
 import { 
   ChevronLeft, LogOut, Trash2, Plus, Store, RotateCcw, 
   RefreshCw, ShieldCheck, ChevronRight, CheckCircle2, 
-  Terminal, AlertTriangle, Zap, Trash, Lock
+  Terminal, AlertTriangle, Zap, Trash, Lock, HeartHandshake
 } from "lucide-react";
 import { VERSION } from "@/constants/version";
 import { deleteDriveFile } from "@/lib/driveFile";
@@ -283,27 +283,27 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* 支持開發者 (Premium Highlight) */}
+        {/* 支持開源專案 (Open Source Support) */}
         <section className="bg-slate-900 p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden group">
            {/* 背景動態飾點 */}
-           <div className="absolute top-0 right-0 w-32 h-32 bg-pink-500/20 rounded-full blur-3xl -mr-8 -mt-8 animate-pulse" />
+           <div className="absolute top-0 right-0 w-32 h-32 bg-[#34DA4F]/20 rounded-full blur-3xl -mr-8 -mt-8 animate-pulse" />
            <div className="absolute bottom-0 left-0 w-24 h-24 bg-[#34DA4F]/10 rounded-full blur-2xl -ml-6 -mb-6" />
            
            <div className="flex justify-between items-start relative z-10">
               <div className="space-y-1.5">
                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 bg-pink-500 rounded-full animate-ping" />
-                    <h3 className="text-[10px] font-black text-pink-400 uppercase tracking-[0.3em]">Support Project</h3>
+                    <span className="w-2 h-2 bg-[#34DA4F] rounded-full animate-ping" />
+                    <h3 className="text-[10px] font-black text-[#34DA4F] uppercase tracking-[0.3em]">Support Open Source</h3>
                  </div>
-                 <p className="text-2xl font-black text-white tracking-tight">請開發者喝杯咖啡</p>
+                 <p className="text-2xl font-black text-white tracking-tight">支持開源專案維護</p>
               </div>
-              <div className="w-14 h-14 bg-white/5 border border-white/10 backdrop-blur-xl text-pink-500 rounded-2xl flex items-center justify-center shadow-inner">
-                 <Zap size={28} fill="currentColor" className="drop-shadow-[0_0_8px_rgba(236,72,153,0.5)]" />
+              <div className="w-14 h-14 bg-white/5 border border-white/10 backdrop-blur-xl text-[#34DA4F] rounded-2xl flex items-center justify-center shadow-inner">
+                 <HeartHandshake size={28} fill="currentColor" className="drop-shadow-[0_0_8px_rgba(52,218,79,0.5)]" />
               </div>
            </div>
            
            <p className="text-xs text-slate-400 font-bold leading-relaxed mt-4 relative z-10 text-pretty">
-             如果您覺得 ZJ Card 實用且安全，您的贊助將直接支持專案的伺服器維護與功能開發，讓我們能一起走得更遠！
+              ZJ Card 目前已轉為「完全免費且開源」之公益專案。如果您覺得本程式對您有幫助，歡迎小額贊助支持伺服器維護與持續開發。
            </p>
 
            <a 

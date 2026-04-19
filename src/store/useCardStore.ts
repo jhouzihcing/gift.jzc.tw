@@ -20,7 +20,6 @@ export interface Card {
 
 interface CardStore {
   cards: Card[];
-  isPro: boolean;
   isInitialized: boolean;
   customMerchants: string[];
   cloudFileIds: { visible: string | null; hidden: string | null };
@@ -34,7 +33,6 @@ interface CardStore {
   
   addCard: (newCard: Card) => boolean;
   setCards: (cards: Card[]) => void;
-  setProStatus: (isPro: boolean) => void;
   moveToTrash: (id: string) => void;
   restoreFromTrash: (id: string) => void;
   deletePermanently: (id: string) => void;
@@ -51,7 +49,6 @@ export const useCardStore = create<CardStore>()(
   persist(
     (set, get) => ({
       cards: [],
-      isPro: false,
       isInitialized: false,
       customMerchants: [],
       syncQueue: [],
@@ -77,16 +74,10 @@ export const useCardStore = create<CardStore>()(
       })),
 
       addCard: (newCard) => {
-        const { cards, isPro } = get();
+        const { cards } = get();
         const isDuplicate = cards.some(c => c.barcode === newCard.barcode);
         if (isDuplicate) {
           alert("⚠️ 此卡片早已被掃描存檔，請更換下一張！");
-          return false;
-        }
-
-        const activeCardsCount = cards.filter(c => c.deletedAt === null).length;
-        if (!isPro && activeCardsCount >= 25) {
-          alert("已達免費版上限 (25張)，請升級 PRO 解鎖無限存取！");
           return false;
         }
 
@@ -137,7 +128,6 @@ export const useCardStore = create<CardStore>()(
       },
 
       setCards: (cards) => set({ cards }),
-      setProStatus: (isPro) => set({ isPro }),
     }),
     {
       name: "sgcm-cards-v1",
@@ -169,7 +159,6 @@ export const useCardStore = create<CardStore>()(
       })),
       partialize: (state) => ({
         cards: state.cards,
-        isPro: state.isPro,
         customMerchants: state.customMerchants,
       }),
     }

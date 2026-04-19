@@ -10,11 +10,19 @@
 
 <br />
 
-## 💖 贊助開發者 (Support)
-本專案為 **非營利性質的公益開發**，旨在為使用者提供免費且安全的工具。然而，維護伺服器與持續開發仍需一定的成本，非常需要大家的支持與鼓勵！
+### 💖 贊助開發者 (Support)
+本專案為 **非營利性質的公益開發**，旨在提供免費且安全的工具。<br />
+維護伺服器與持續開發仍需一定的成本，非常需要大家的支持與鼓勵！
+
+<br />
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/jzc0220)
-[![Sinopac](https://img.shields.io/badge/永豐銀行-贊助支持-red?style=for-the-badge&logo=SinoPac)](https://gift.jzc.tw) *(申請中)*
+&nbsp;&nbsp;&nbsp;&nbsp;
+[![Sinopac](https://img.shields.io/badge/永豐銀行-贊助支持-red?style=for-the-badge&logo=SinoPac)](https://gift.jzc.tw)
+<br />
+*(永豐銀行申請中)*
+
+</div>
 
 ---
 

@@ -24,7 +24,7 @@ jobs:
 
       - name: Create Production Archive
         run: |
-          tar -czf source.tar.gz --exclude=.git --exclude=node_modules --exclude=.next .
+          tar -czf source.tar.gz --exclude=source.tar.gz --exclude=.git --exclude=node_modules --exclude=.next .
 
       - name: Sign Artifacts
         run: |

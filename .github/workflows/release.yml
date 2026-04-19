@@ -1,0 +1,42 @@
+name: Release and Sign
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write  # Needed for keyless signing via OIDC
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@d7d6bc7722e3daa8354c50bcb52f4837da5e9b6a # v3.8.1
+
+      - name: Create Production Archive
+        run: |
+          tar -czf source.tar.gz --exclude=.git --exclude=node_modules --exclude=.next .
+
+      - name: Sign Artifacts
+        run: |
+          cosign sign-blob --yes source.tar.gz \
+            --output-signature source.tar.gz.sig \
+            --output-certificate source.tar.gz.pem
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631 # v2.2.2
+        with:
+          files: |
+            source.tar.gz
+            source.tar.gz.sig
+            source.tar.gz.pem
+          generate_release_notes: true

@@ -55,6 +55,19 @@ npm run dev
 ## 🤝 貢獻與安全 (Security & Contributing)
 發現漏洞或有新想法？請參閱我們的 [SECURITY.md](SECURITY.md) 了解漏洞回報流程。
 
+## 🔐 簽署與驗證 (Signing & Verification)
+
+本專案的所有版本發行均透過 [Sigstore Cosign](https://github.com/sigstore/cosign) 進行加密簽署。您可以透過以下指令驗證下載的成品：
+
+```bash
+# 下載 .tar.gz, .sig 與 .pem 檔案後
+cosign verify-blob source.tar.gz \
+  --signature source.tar.gz.sig \
+  --certificate source.tar.gz.pem \
+  --certificate-identity-regexp "https://github.com/jhouzihcing/gift.jzc.tw/.github/workflows/release.yml@refs/tags/v.*" \
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+```
+
 ---
 <div align="center">
 Made with ❤️ by JZC Design

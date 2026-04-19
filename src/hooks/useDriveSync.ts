@@ -1,5 +1,5 @@
 /**
- * useDriveSync — v2.23.0 極簡版 (Sync Revamp)
+ * useDriveSync — {VERSION} 極簡版 (Sync Revamp)
  *
  * 核心原則：
  * 1. 回歸純粹：僅使用 Email 作為同步金鑰，實現帳號即金鑰。
@@ -9,6 +9,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useCardStore } from "@/store/useCardStore";
+import { VERSION } from "@/constants/version";
 import {
   getOrCreateDriveFile,
   readDriveDB,
@@ -161,7 +162,7 @@ export function useDriveSync() {
         }
 
         setSyncStatus(false, Date.now());
-        addSyncLog(`🏁 同步已就緒（帳號身分鎖定）。`);
+        addSyncLog(`🏁 ZJ Card ${VERSION} 同步已就緒。`);
       } catch (err: any) {
         addSyncLog(`🔥 初始化失敗: ${err.message || err}`);
         setSyncStatus(false, null);

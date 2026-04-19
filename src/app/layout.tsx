@@ -18,9 +18,9 @@ export const metadata: Metadata = {
     title: "ZJ Card",
   },
   icons: {
-    icon: "/logo.png?v=2.4.4",
-    apple: "/logo.png?v=2.4.4",
-    shortcut: "/favicon.ico?v=2.4.4",
+    icon: "/logo.png?v=2.32.0",
+    apple: "/logo.png?v=2.32.0",
+    shortcut: "/favicon.ico?v=2.32.0",
   },
   manifest: "/manifest.webmanifest",
   openGraph: {

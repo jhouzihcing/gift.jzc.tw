@@ -3,9 +3,10 @@
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ShieldCheck, Database, Code, AlertTriangle, Globe, Lock, Share2, Trash2, Gavel, HeartHandshake, Eye, ShieldAlert, Copyright, ExternalLink } from "lucide-react";
 import Link from "next/link";
+import { VERSION } from "@/constants/version";
 
 /**
- * ZJ Card Privacy Policy & Legal Disclaimer Page (v2.30.0)
+ * ZJ Card Privacy Policy & Legal Disclaimer Page (VERSION)
  * ─────────────────────────────────────────────
  * Layout: 
  *   Top -> Main Chinese version for local users (Large/Clear).
@@ -28,7 +29,7 @@ export default function PrivacyPage() {
              <h1 className="text-xl font-black tracking-tight text-slate-800">隱私權政策與法律聲明</h1>
           </div>
           <div className="bg-[#34DA4F]/10 text-[#34DA4F] px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
-             v2.32.0
+             {VERSION}
           </div>
         </header>
 
@@ -194,10 +195,10 @@ export default function PrivacyPage() {
              <div className="flex flex-col items-center gap-2 text-slate-300 font-black text-[10px] uppercase tracking-widest leading-loose">
                 <div className="flex items-center gap-2">
                    <HeartHandshake size={14} className="text-[#34DA4F]" />
-                   ZJ Card公益開發小組 • Version 2.32.0
+                   ZJ Card公益開發小組 • Version {VERSION}
                 </div>
                 <div className="opacity-50 text-[9px] tracking-widest mt-2 bg-slate-50 px-3 py-1 rounded-full border border-slate-100">
-                   最後更新時間 Last Updated: 2026-04-19 16:39:30
+                   最後更新時間 Last Updated: 2026-04-19 17:15:00
                 </div>
              </div>
           </footer>

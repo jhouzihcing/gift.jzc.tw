@@ -155,7 +155,7 @@ export const useCardStore = create<CardStore>()(
             console.error("[Storage] 本地加密失敗:", e);
           }
         },
-        removeItem: (name) => localStorage.removeItem(name),
+        removeItem: async (name) => localStorage.removeItem(name),
       })),
       partialize: (state) => ({
         cards: state.cards,
